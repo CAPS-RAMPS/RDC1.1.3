@@ -1,4 +1,5 @@
 #_____CHANGE LOG_____#
+    # 2019-09-25: Switched to RDC 1.1.3
     # 2019-05-08: Switched to RDC 1.1.2
     # 2019-04-01
         #Switched to RDC 1.1.1
@@ -39,7 +40,7 @@ RUNFILE = os.path.join(SETTINGS,'run.ini')
 TEMPLATE= config.importDict(TEMPLPATH)
 DEPENDENCIES = config.importDict(DEPENDPATH)
 TOOLTIPS = config.importDict(TOOLTIPPATH,delimit=False)
-DCWNAME = 'RDCauto1.1.2'
+DCWNAME = 'RDCauto1.1.3'
 for ext in ['.exe','.py']:
     if os.path.exists(os.path.join(SOURCE,(DCWNAME+ext))):
         DCWEXT=ext
