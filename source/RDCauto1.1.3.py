@@ -1,8 +1,7 @@
 #_____CHANGE LOG_____#
-    #TO BE IMPLEMENTED:
-        #-Copy printed output to a debug file
-        #-Tracker moved to a separate library
-        #-Menu for tracker selection (separate window?)
+    #1.1.3 2019-10-xx
+        #- Change reading routine to work with v9.13 RAMP firmware
+        #- Modify trackers to work with v9.13 RAMP firmware
 
     #1.1.2 2019-05-08
         #Fixed compatibility issue w/new firmware RAMP-PPA boxes installed on new PPAs
