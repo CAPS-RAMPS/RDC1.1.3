@@ -2112,7 +2112,7 @@ def readWrite(runInfo,raw,cal,chk=None):
         #let user know that error reports were written successfully (if enabled)
     if printOut: print('\n') #Blank line between reports of processing completion
 
-def parseLine(line,cal,tracker=None): 
+def parseLineOld(line,cal,tracker=None): 
     parsedDict=dict()
     line=line.split("X")
     for elem in line:
@@ -2129,6 +2129,49 @@ def parseLine(line,cal,tracker=None):
         (eType,eParsed)=inspectElem(elem,tracker)
         if eParsed: parsedDict[eType]=eParsed
     return parsedDict
+
+def parseLine(line,cal,tracker=None):
+    parsedDict=dict() #Map to store parsed values
+    line=line.split("X") #'X' separates the RAMP number from the data string
+    line=line[1] #Everything after the "X" should constitute valid data
+    line=line.split(",") #Values are comma-delimited
+    #Attempt to locate and parse a valid time stamp:
+    for i in range(len(line)):
+        elem=line[i]
+        if elem.startswith("DATE") and i!=len(line)-1
+        #Locate a string that says "DATE", assume the next element is the time stamp
+        #Ensure that the "DATE" string is not the last element
+            pass2Parser=','.join(["DATETIME",line[i+1]])
+            dateTime=read.timeStamp(pass2Parser.cal.date)
+            if tracker:  dateTime=tracker.push('DATE',dateTime)
+            if dateTime!=None: 
+                parsedDict['DATE']=dateTime
+                tStampID=i+1 #Store index of time stamp if parsed successfully
+                break
+    try: #If date could not be established, do not read or track line
+        if dateTime==None: return None
+    except: return None
+    #Parse the rest of the data:
+    pDict=read.options() #Get map of readable headers
+    eLenDict=read.expectedLengths() #Get map of readable headers:expected number of outputs
+    readableSet=pDict.keys()
+    i=tStampID+1 #Start immediately after the time stamp
+    while i<len(line)-1:
+        elem=line[i]
+        if elem in readableSet: #if header is known by the reader, attempt to parse
+            expLen=eLenDict[elem]
+            expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
+            if len(readableSet & set(expDatLst))>1: #i.e. if more than one header in isolated list
+                pass #TO DO: Try to scavange data from corrupted substring
+                raise RuntimeError('Pause in parseLine(): Feature not implemented:\nscavanging data from corrupted substring')
+            else: #Otherwise, pass header and readings to appropriate parser
+                pass2Parser=','.join(expDatLst) #prepare string to be parsed
+                readings=pDict[elem](pass2Parser) #Get output
+                if tracker: readings=tracker.push(elem,readings)
+                if readings: 
+                    parsedDict[elem]=readings
+                    i+=expLen+1
+        else: i++
 
 def inspectElem(elem,tracker):
     pDict=read.options() #Map of parameter name to read method
@@ -2422,5 +2465,5 @@ def closerDate(dates,lastDate,tgt):
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
 if __name__ == '__main__':
-    multiprocessing.freeze_support()
-    init()
+    #multiprocessing.freeze_support()
+    #init()
