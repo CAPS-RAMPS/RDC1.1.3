@@ -115,10 +115,10 @@ class read(object):
             header=sTemp[0]
             out={header : (float,1,None)}
             try: return read.vals(s,out,1)
-                except: return out #Return empty dictionary if could not be parsed but connected
+            except: return out #Return empty dictionary if could not be parsed but connected
         except: return None
 
-    class echem
+    class echem(object):
         @staticmethod
         def raw(s):
             dOut=   {"S1": None #Stores values of echem sensors
@@ -495,7 +495,7 @@ class read(object):
                 except: return None
             return round((F-32)*5/9,1)
 
-    class ptr
+    class ptr(object):
         @staticmethod
         def old(s):
             out={
@@ -509,7 +509,20 @@ class read(object):
             try: return read.vals(s,out,7)
             except: return None
 
-        def new(s): pass
+        def new(s):
+            headerChange=   {
+                            "PM1.0" : "PM010",
+                            "PM2.5" : "PM025",
+                            "PM10"  : "PM100"
+                            }
+            try: 
+                sTemp=s.split(',')
+                header=sTemp[0]
+                header=headerChange[header] #Change header as seen in map above
+                out={header : (float,1,None)}
+                try: return read.vals(s,out,1)
+                except: return out #Return empty dictionary if could not be parsed but connected
+            except: return None
 
     @staticmethod
     def tsi(s):

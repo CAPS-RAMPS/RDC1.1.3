@@ -2138,11 +2138,11 @@ def parseLine(line,cal,tracker=None):
     #Attempt to locate and parse a valid time stamp:
     for i in range(len(line)):
         elem=line[i]
-        if elem.startswith("DATE") and i!=len(line)-1
+        if elem.startswith("DATE") and i!=len(line)-1:
         #Locate a string that says "DATE", assume the next element is the time stamp
         #Ensure that the "DATE" string is not the last element
             pass2Parser=','.join(["DATETIME",line[i+1]])
-            dateTime=read.timeStamp(pass2Parser.cal.date)
+            dateTime=read.timeStamp(pass2Parser,cal.date)
             if tracker:  dateTime=tracker.push('DATE',dateTime)
             if dateTime!=None: 
                 parsedDict['DATE']=dateTime
@@ -2153,9 +2153,8 @@ def parseLine(line,cal,tracker=None):
         #Otherwise, attempt to parse everything after the datetime string:
         else: parseSubstrings(parsedDict,line[i+1:]) 
     except: return None
-
    
-def parseSubstrings(parsedDict,line)
+def parseSubstrings(parsedDict,line):
     #Parse the data string after the time stamp
     #Does not return, populated the parsedDict
     pDict=read.options() #Get map of readable headers
@@ -2173,7 +2172,7 @@ def parseSubstrings(parsedDict,line)
             expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
             if len(readableSet & set(expDatLst))>1: #i.e. if more than one header in isolated list
                 pass #TO DO: Try to scavange data from corrupted substring
-                raise RuntimeError('Pause in parseLine(): Feature not implemented:\nscavenging data from corrupted substring')
+                raise RuntimeError('Feature not implemented:\nscavenging data from corrupted substring')
             else: #Otherwise, pass header and readings to appropriate parser
                 pass2Parser=','.join(expDatLst) #prepare string to be parsed
                 readings=pDict[elem](pass2Parser) #Get output
@@ -2181,7 +2180,7 @@ def parseSubstrings(parsedDict,line)
                 if readings: #If extracted values were valid, add to output dictionary
                     parsedDict[elem]=readings
                     i+=expLen+1
-        else: i++
+        else: i+=1
 
 def inspectElem(elem,tracker):
     pDict=read.options() #Map of parameter name to read method
@@ -2474,6 +2473,6 @@ def closerDate(dates,lastDate,tgt):
     #both dates are after the target date
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
     #multiprocessing.freeze_support()
     #init()
