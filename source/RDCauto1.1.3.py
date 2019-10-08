@@ -2150,25 +2150,35 @@ def parseLine(line,cal,tracker=None):
                 break
     try: #If date could not be established, do not read or track line
         if dateTime==None: return None
+        #Otherwise, attempt to parse everything after the datetime string:
+        else: parseSubstrings(parsedDict,line[i+1:]) 
     except: return None
-    #Parse the rest of the data:
+
+   
+def parseSubstrings(parsedDict,line)
+    #Parse the data string after the time stamp
+    #Does not return, populated the parsedDict
     pDict=read.options() #Get map of readable headers
     eLenDict=read.expectedLengths() #Get map of readable headers:expected number of outputs
     readableSet=pDict.keys()
-    i=tStampID+1 #Start immediately after the time stamp
+    i=0 #Start immediately after the time stamp
     while i<len(line)-1:
         elem=line[i]
         if elem in readableSet: #if header is known by the reader, attempt to parse
-            expLen=eLenDict[elem]
+            #If header is in the map of expected lengths, reterieve that value:
+            if elem in eLenDict:
+                expLen=eLenDict[elem]
+            else: #Otherwise, assume there is only one
+                expLen=1
             expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
             if len(readableSet & set(expDatLst))>1: #i.e. if more than one header in isolated list
                 pass #TO DO: Try to scavange data from corrupted substring
-                raise RuntimeError('Pause in parseLine(): Feature not implemented:\nscavanging data from corrupted substring')
+                raise RuntimeError('Pause in parseLine(): Feature not implemented:\nscavenging data from corrupted substring')
             else: #Otherwise, pass header and readings to appropriate parser
                 pass2Parser=','.join(expDatLst) #prepare string to be parsed
                 readings=pDict[elem](pass2Parser) #Get output
                 if tracker: readings=tracker.push(elem,readings)
-                if readings: 
+                if readings: #If extracted values were valid, add to output dictionary
                     parsedDict[elem]=readings
                     i+=expLen+1
         else: i++

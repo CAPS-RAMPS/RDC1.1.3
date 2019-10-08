@@ -12,16 +12,50 @@ class read(object):
     def __init__(self): pass
 
     @staticmethod
-    def options():
+    def expectedLengths():
+        #Functions which returns how many values are expected
+        #After each header in the map below:
         opt={
-            "ECHEM" : read.echem,
-            "CO2"   : read.co2,
-            "BATT"  : read.batt.line,
+            "RAW"   : 8,
+            "STAT"  : 3,
+            "MET"   : 2
+            }
+
+        return opt
+
+    @staticmethod
+    def options():
+        #Maps the headers below to functions which read substrings
+        # with those headers
+        opt={
+            "RAW"   : read.echem.raw,
+            "CO"    : read.echem.cal,
+            "NO2"   : read.echem.cal,
+            "SO2"   : read.echem.cal,
+            "NO"    : read.echem.cal,
+            "O3"    : read.echem.cal,
+
+            "CO2"   : read.singleVal,
+            "T"     : read.singleVal,
+            "RH"    : read.singleVal,
+
+            "BATT"  : read.singleVal,
+            "CHRG"  : read.singleVal,
+            "RUN"   : read.singleVal,
+            "SD"    : read.singleVal,
+
+            "PM1.0" : read.ptr.new,
+            "PM2.5" : read.ptr.new,
+            "PM10"  : read.ptr.new,
+
+            "WD"    : read.singleVal,
+            "WS"    : read.singleVal,
+
             "MET"   : read.met,
             "TSI"   : read.tsi,
             "ADI"   : read.adi,
             "PPA"   : read.ppa.line,
-            "PTR"   : read.ptr,
+            "PTR"   : read.ptr.old,
             "STAT"  : read.stat,
             "BCM"   : read.bcm
             }
@@ -75,33 +109,56 @@ class read(object):
         except: return None
 
     @staticmethod
-    def echem(s):
-        dOut=   {"S1": None #Stores values of echem sensors
-                ,"S2": None
-                ,"S3": None
-                ,"S4": None
-                }
+    def singleVal(s):
         try:
-            s=s.split(",")
-            #print(s)
-            #if (len(s)!=2*len(dOut)+2) and (len(s)!=2*len(dOut)+1): 
-            #    return dOut #Rejects unexpected line lengths
-            nEnt=2 #Number of eChem entries per sensor
-            nSens=len(dOut) #Number of sensors
-            for i in range(1,nSens*nEnt+1,nEnt):
-                #Iterates over the number of entries expected in the ECHEM line,
-                #skipping every other value (2 readings for each ECHEM signal)
-                #Goal of loop, get the net signal from the two readings for each sensor
-                sNum="S"+str(i//nEnt+1) #i.e. S1, S2, S3, S4
-                if sNum in dOut:
-                    try:
-                        (S_s,S_r)=(int(s[i]),int(s[i+1]))
-                        #Gets the two signals for the particular sensor
-                        dOut[sNum]=S_s-S_r #Stores the net value in the dictionary
-                    except: pass
-            #print(dOut)
-            return dOut
-        except: return dOut
+            sTemp=s.split(',')
+            header=sTemp[0]
+            out={header : (float,1,None)}
+            try: return read.vals(s,out,1)
+                except: return out #Return empty dictionary if could not be parsed but connected
+        except: return None
+
+    class echem
+        @staticmethod
+        def raw(s):
+            dOut=   {"S1": None #Stores values of echem sensors
+                    ,"S2": None
+                    ,"S3": None
+                    ,"S4": None
+                    }
+            try:
+                s=s.split(",")
+                #print(s)
+                #if (len(s)!=2*len(dOut)+2) and (len(s)!=2*len(dOut)+1): 
+                #    return dOut #Rejects unexpected line lengths
+                nEnt=2 #Number of eChem entries per sensor
+                nSens=len(dOut) #Number of sensors
+                for i in range(1,nSens*nEnt+1,nEnt):
+                    #Iterates over the number of entries expected in the ECHEM line,
+                    #skipping every other value (2 readings for each ECHEM signal)
+                    #Goal of loop, get the net signal from the two readings for each sensor
+                    sNum="S"+str(i//nEnt+1) #i.e. S1, S2, S3, S4
+                    if sNum in dOut:
+                        try:
+                            (S_s,S_r)=(int(s[i]),int(s[i+1]))
+                            #Gets the two signals for the particular sensor
+                            dOut[sNum]=S_s-S_r #Stores the net value in the dictionary
+                        except: pass
+                #print(dOut)
+                return dOut
+            except: return dOut
+
+        @staticmethod
+        def cal(s):
+            try:
+                sTemp=s.split(',')
+                gasID=sTemp[0] #The header is the gas name
+                calSuf="CAL" #Suffix added to 'calibrated' gas headers
+                gasCalName=gasID+calSuf
+                out={gasCalName : (float,1,None)}
+                try: return read.vals(s,out,1)
+                except: return out #Return empty dictionary if could not be parsed but connected
+            except: return None
 
     class batt(object):
         @staticmethod
@@ -438,18 +495,21 @@ class read(object):
                 except: return None
             return round((F-32)*5/9,1)
 
-    @staticmethod
-    def ptr(s):
-        out={
-            "PTR010"    : (float,1,None),
-            "PTR010A"   : (float,2,None),
-            "PTR025"    : (float,3,None),
-            "PTR025A"   : (float,4,None),
-            "PTR100"    : (float,5,None),
-            "PTR100A"   : (float,6,None)
-            }
-        try: return read.vals(s,out,7)
-        except: return None
+    class ptr
+        @staticmethod
+        def old(s):
+            out={
+                "PTR010"    : (float,1,None),
+                "PTR010A"   : (float,2,None),
+                "PTR025"    : (float,3,None),
+                "PTR025A"   : (float,4,None),
+                "PTR100"    : (float,5,None),
+                "PTR100A"   : (float,6,None)
+                }
+            try: return read.vals(s,out,7)
+            except: return None
+
+        def new(s): pass
 
     @staticmethod
     def tsi(s):
