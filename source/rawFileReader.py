@@ -114,7 +114,7 @@ class read(object):
             sTemp=s.split(',')
             header=sTemp[0]
             out={header : (float,1,None)}
-            try: return read.vals(s,out,1)
+            try: return read.vals(s,out,2)
             except: return out #Return empty dictionary if could not be parsed but connected
         except: return None
 
@@ -156,7 +156,7 @@ class read(object):
                 calSuf="CAL" #Suffix added to 'calibrated' gas headers
                 gasCalName=gasID+calSuf
                 out={gasCalName : (float,1,None)}
-                try: return read.vals(s,out,1)
+                try: return read.vals(s,out,2)
                 except: return out #Return empty dictionary if could not be parsed but connected
             except: return None
 
@@ -506,7 +506,7 @@ class read(object):
                 "PTR100"    : (float,5,None),
                 "PTR100A"   : (float,6,None)
                 }
-            try: return read.vals(s,out,7)
+            try: return read.vals(s,out,len(out)+1)
             except: return None
 
         def new(s):
@@ -520,7 +520,7 @@ class read(object):
                 header=sTemp[0]
                 header=headerChange[header] #Change header as seen in map above
                 out={header : (float,1,None)}
-                try: return read.vals(s,out,1)
+                try: return read.vals(s,out,2)
                 except: return out #Return empty dictionary if could not be parsed but connected
             except: return None
 
