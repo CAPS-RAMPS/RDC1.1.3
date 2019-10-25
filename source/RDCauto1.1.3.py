@@ -2132,7 +2132,6 @@ def parseLineOld(line,cal,tracker=None):
 
 def parseLine(line,cal,rParamDict,tracker=None):
     parsedDict=dict() #Map to store parsed values
-    for catName in rParamDict.values(): parsedDict[catName]=None #Initialize category names in parsedDict
     line=line.split("X") #'X' separates the RAMP number from the data string
     line=line[1] #Everything after the "X" should constitute valid data
     line=line.split(",") #Values are comma-delimited
@@ -2165,8 +2164,8 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
     i=0 #Start immediately after the time stamp
     while i<len(line)-1:
         elem=line[i]
+        print(i,len(line),elem)
         if elem in readableSet: #if header is known by the reader, attempt to parse
-            catName=rParamDict[elem] #Get category name of header
             #If header is in the map of expected lengths, reterieve that value:
             if elem in eLenDict:
                 expLen=eLenDict[elem]
@@ -2180,7 +2179,12 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
                 pass2Parser=','.join(expDatLst) #prepare string to be parsed
                 readings=pDict[elem](pass2Parser) #Get output
                 if tracker: readings=tracker.push(elem,readings)
-                parsedDict[catName].update(readings)
+                #Use a random header for current element as determinant for category
+                #(all headers in 'readings' should be in the same category)
+                randHeader=next(iter(readings.keys())) #Random header from output
+                catName=rParamDict[randHeader]
+                parsedDict.update({catName:readings})
+                print(randHeader,readings)
                 i+=expLen+1
         else: i+=1
 
@@ -2489,6 +2493,13 @@ templateDict=config.importDict(TEMPLPATH)
 paramDict=templateDict['Output']
 rParamDict=dict()
 for key in paramDict:
-    for value in paramDict[key]:
-        rParamDict[value]=key
+    excludeSet={'Order','Output File Name'}
+    if key not in excludeSet:
+        entry=paramDict[key]
+        if type(entry)==list:
+            for value in paramDict[key]:
+                rParamDict[value]=key
+        else:
+            rParamDict[entry]=key
+#print(rParamDict)
 print(parseLine(line,cal,rParamDict))
