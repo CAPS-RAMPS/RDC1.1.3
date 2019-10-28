@@ -34,6 +34,7 @@ class read(object):
             "SO2"   : read.echem.cal,
             "NO"    : read.echem.cal,
             "O3"    : read.echem.cal,
+            "VOC"   : read.echem.cal,
 
             "CO2"   : read.singleVal,
             "T"     : read.singleVal,
@@ -114,17 +115,17 @@ class read(object):
             sTemp=s.split(',')
             header=sTemp[0]
             out={header : (float,1,None)}
-            try: return read.vals(s,out,1)
+            try: return read.vals(s,out,2)
             except: return out #Return empty dictionary if could not be parsed but connected
         except: return None
 
     class echem(object):
         @staticmethod
         def raw(s):
-            dOut=   {"S1": None #Stores values of echem sensors
-                    ,"S2": None
-                    ,"S3": None
-                    ,"S4": None
+            dOut=   {"S1NET": None #Stores values of echem sensors
+                    ,"S2NET": None
+                    ,"S3NET": None
+                    ,"S4NET": None
                     }
             try:
                 s=s.split(",")
@@ -137,7 +138,7 @@ class read(object):
                     #Iterates over the number of entries expected in the ECHEM line,
                     #skipping every other value (2 readings for each ECHEM signal)
                     #Goal of loop, get the net signal from the two readings for each sensor
-                    sNum="S"+str(i//nEnt+1) #i.e. S1, S2, S3, S4
+                    sNum="S"+str(i//nEnt+1)+"NET" #i.e. S1, S2, S3, S4
                     if sNum in dOut:
                         try:
                             (S_s,S_r)=(int(s[i]),int(s[i+1]))
@@ -154,11 +155,25 @@ class read(object):
                 sTemp=s.split(',')
                 gasID=sTemp[0] #The header is the gas name
                 calSuf="CAL" #Suffix added to 'calibrated' gas headers
-                gasCalName=gasID+calSuf
+                gasCalName=read.echem.place(gasID,calSuf)
                 out={gasCalName : (float,1,None)}
-                try: return read.vals(s,out,1)
+                try: return read.vals(s,out,2)
                 except: return out #Return empty dictionary if could not be parsed but connected
             except: return None
+
+        @staticmethod
+        def place(gas,readType):
+            #Takes a gas name & reading type, retrns the the place number
+            #e.g. echemPlace("CO","CAL") -> "S1CAL"
+            place={
+                "CO"    : "S1",
+                "SO2"   : "S2",
+                "NO"    : "S2",
+                "NO2"   : "S3",
+                "O3"    : "S4",
+                "VOC"   : "S4"
+                }
+            return place[gas]+readType
 
     class batt(object):
         @staticmethod
@@ -506,7 +521,7 @@ class read(object):
                 "PTR100"    : (float,5,None),
                 "PTR100A"   : (float,6,None)
                 }
-            try: return read.vals(s,out,7)
+            try: return read.vals(s,out,len(out)+1)
             except: return None
 
         def new(s):
@@ -520,7 +535,7 @@ class read(object):
                 header=sTemp[0]
                 header=headerChange[header] #Change header as seen in map above
                 out={header : (float,1,None)}
-                try: return read.vals(s,out,1)
+                try: return read.vals(s,out,2)
                 except: return out #Return empty dictionary if could not be parsed but connected
             except: return None
 

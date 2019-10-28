@@ -2099,7 +2099,7 @@ def readWrite(runInfo,raw,cal,chk=None):
     else: tracker=None
     line=raw.readline() #Get first line of raw file
     while line!="":
-        pDict=parseLine(line,cal,tracker) #Turns raw string into value dictionary
+        pDict=parseLine(line,cal,runInfo.rParamDict,tracker) #Turns raw string into value dictionary
         wLine=config4Writing(pDict,cal) #Rewrites dictionary as an output string
         if wLine!=None: cal.write(wLine)  #If valid string, write to processed file
         #elif tracker: tracker.badLine(line)
@@ -2130,7 +2130,7 @@ def parseLineOld(line,cal,tracker=None):
         if eParsed: parsedDict[eType]=eParsed
     return parsedDict
 
-def parseLine(line,cal,tracker=None):
+def parseLine(line,cal,rParamDict,tracker=None):
     parsedDict=dict() #Map to store parsed values
     line=line.split("X") #'X' separates the RAMP number from the data string
     line=line[1] #Everything after the "X" should constitute valid data
@@ -2151,10 +2151,11 @@ def parseLine(line,cal,tracker=None):
     try: #If date could not be established, do not read or track line
         if dateTime==None: return None
         #Otherwise, attempt to parse everything after the datetime string:
-        else: parseSubstrings(parsedDict,line[i+1:]) 
+        else: parseSubstrings(parsedDict,line[i+1:],rParamDict,tracker) 
+        return parsedDict
     except: return None
    
-def parseSubstrings(parsedDict,line):
+def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
     #Parse the data string after the time stamp
     #Does not return, populated the parsedDict
     pDict=read.options() #Get map of readable headers
@@ -2163,6 +2164,7 @@ def parseSubstrings(parsedDict,line):
     i=0 #Start immediately after the time stamp
     while i<len(line)-1:
         elem=line[i]
+        print(i,len(line),elem)
         if elem in readableSet: #if header is known by the reader, attempt to parse
             #If header is in the map of expected lengths, reterieve that value:
             if elem in eLenDict:
@@ -2171,15 +2173,19 @@ def parseSubstrings(parsedDict,line):
                 expLen=1
             expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
             if len(readableSet & set(expDatLst))>1: #i.e. if more than one header in isolated list
-                pass #TO DO: Try to scavange data from corrupted substring
+                #TO DO: Try to scavange data from corrupted substring
                 raise RuntimeError('Feature not implemented:\nscavenging data from corrupted substring')
             else: #Otherwise, pass header and readings to appropriate parser
                 pass2Parser=','.join(expDatLst) #prepare string to be parsed
                 readings=pDict[elem](pass2Parser) #Get output
                 if tracker: readings=tracker.push(elem,readings)
-                if readings: #If extracted values were valid, add to output dictionary
-                    parsedDict[elem]=readings
-                    i+=expLen+1
+                #Use a random header for current element as determinant for category
+                #(all headers in 'readings' should be in the same category)
+                randHeader=next(iter(readings.keys())) #Random header from output
+                catName=rParamDict[randHeader]
+                parsedDict.update({catName:readings})
+                print(randHeader,readings)
+                i+=expLen+1
         else: i+=1
 
 def inspectElem(elem,tracker):
@@ -2476,3 +2482,24 @@ def closerDate(dates,lastDate,tgt):
 #if __name__ == '__main__':
     #multiprocessing.freeze_support()
     #init()
+
+
+#Test code: remove later:
+class Struct(object): pass
+cal=Struct()
+cal.date=datetime.date(2019,7,23)
+line='S1037XDATE,07/23/19 00:00:00,CO,223.60,NO,-9.86,NO2,2.27,O3,48.12,CO2,431,T,29.70,RH,37.50,PM1.0,4.25,PM2.5,5.50,PM10,6.00,WD,90.09,WS,0.00,BATT,4.07,CHRG,571.90,RUN,49.94,SD,1,RAW,-30,98,84,115,5,0,0,-36,STAT,6b,0,f0Z'
+templateDict=config.importDict(TEMPLPATH)
+paramDict=templateDict['Output']
+rParamDict=dict()
+for key in paramDict:
+    excludeSet={'Order','Output File Name'}
+    if key not in excludeSet:
+        entry=paramDict[key]
+        if type(entry)==list:
+            for value in paramDict[key]:
+                rParamDict[value]=key
+        else:
+            rParamDict[entry]=key
+#print(rParamDict)
+print(parseLine(line,cal,rParamDict))
