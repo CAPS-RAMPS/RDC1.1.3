@@ -67,8 +67,8 @@ from rawFileReader import read
 
 #Version
 NAME="RAMP Data Cleaner"
-VERSION="1.1.2"
-REVISION="2019-05-08"
+VERSION="1.1.3WIP"
+REVISION="2019-10-28"
 
 #Subfolders
 SETTINGS="Settings"
