@@ -2164,7 +2164,6 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
     i=0 #Start immediately after the time stamp
     while i<len(line)-1:
         elem=line[i]
-        print(i,len(line),elem)
         if elem in readableSet: #if header is known by the reader, attempt to parse
             #If header is in the map of expected lengths, reterieve that value:
             if elem in eLenDict:
@@ -2174,17 +2173,20 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
             expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
             if len(readableSet & set(expDatLst))>1: #i.e. if more than one header in isolated list
                 #TO DO: Try to scavange data from corrupted substring
-                raise RuntimeError('Feature not implemented:\nscavenging data from corrupted substring')
+                raise AttributeError('Feature not implemented:\nscavenging data from corrupted substring')
             else: #Otherwise, pass header and readings to appropriate parser
                 pass2Parser=','.join(expDatLst) #prepare string to be parsed
+                print(pass2Parser)
                 readings=pDict[elem](pass2Parser) #Get output
                 if tracker: readings=tracker.push(elem,readings)
                 #Use a random header for current element as determinant for category
                 #(all headers in 'readings' should be in the same category)
                 randHeader=next(iter(readings.keys())) #Random header from output
                 catName=rParamDict[randHeader]
-                parsedDict.update({catName:readings})
-                print(randHeader,readings)
+                if catName not in parsedDict:
+                    parsedDict[catName]=readings
+                parsedDict[catName].update(readings)
+                print(readings)
                 i+=expLen+1
         else: i+=1
 

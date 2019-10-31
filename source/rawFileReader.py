@@ -8,6 +8,8 @@
 import string
 import datetime
 
+from functools import partial
+
 class read(object):
     def __init__(self): pass
 
@@ -43,7 +45,6 @@ class read(object):
             "BATT"  : read.singleVal,
             "CHRG"  : read.singleVal,
             "RUN"   : read.singleVal,
-            "SD"    : read.singleVal,
 
             "PM1.0" : read.ptr.new,
             "PM2.5" : read.ptr.new,
@@ -57,7 +58,7 @@ class read(object):
             "ADI"   : read.adi,
             "PPA"   : read.ppa.line,
             "PTR"   : read.ptr.old,
-            "STAT"  : read.stat,
+            "STAT"  : read.stat.new,
             "BCM"   : read.bcm
             }
         return opt
@@ -593,34 +594,59 @@ class read(object):
         try: return read.vals(s,out)
         except: return None
 
-    @staticmethod
-    def stat(s):
+    class stat(object):
+        @staticmethod
+        def new(s):
+            endChar='Z' #Character appended to end of every data line
+            binForm="08b" #Format integer as 8-bit binary number
+            if s.endswith(endChar):
+                s=s[0:-1] #Chop off end character if just denoting end of line
+            statDict={
+                "HEX1"  : (partial(int,base=16),1,None),
+                "HEX2"  : (partial(int,base=16),2,None),
+                #"HEX3"  : (partial(int,base=16),3,None), #Port status. Not needed at the moment
+                    }
+            hexVals=read.vals(s,statDict)
+            #Convert hexadecimal to binary in statDict:
+            for header in statDict:
+                val=statDict[header]
+                statDict[header]=format(val,binForm)
 
-        outOld={
-            "recharge"  : (int,1,None),
-            "signal"    : (int,2,None),
-            #"ratio"     : (int,3,None),
-            #"interval"  : (int,4,None),
-            #"pump"      : (int,5,None),
-            #"ADC"       : (int,6,None),
-            "SDstat"    : (str,7,None),
-            #"AUXstat"   : (int,8,None)
+            outDict={
+                    "SD"    : statDict["HEX1"][0:3],
+                    "ECREAD": statDict["HEX2"][0:4],
+                    #"PTRCON": statDict["HEX1"][6],
             }
-        outNew= {
+            return outDict
+
+
+        @staticmethod
+        def old(s):
+            outOld={
                 "recharge"  : (int,1,None),
                 "signal"    : (int,2,None),
                 #"ratio"     : (int,3,None),
                 #"interval"  : (int,4,None),
-                #"filter"    : (int,5,None),
-                #"pump"      : (int,6,None),
-                #"ADC"       : (int,7,None),
-                "SDstat"    : (str,8,None),
-                #"AUXstat"   : (int,9,None)
+                #"pump"      : (int,5,None),
+                #"ADC"       : (int,6,None),
+                "SDstat"    : (str,7,None),
+                #"AUXstat"   : (int,8,None)
                 }
-        try: return read.vals(s,outNew)
-        except:
-            try: return read.vals(s,outOld)
-            except: return None
+            outNew= {
+                    "recharge"  : (int,1,None),
+                    "signal"    : (int,2,None),
+                    #"ratio"     : (int,3,None),
+                    #"interval"  : (int,4,None),
+                    #"filter"    : (int,5,None),
+                    #"pump"      : (int,6,None),
+                    #"ADC"       : (int,7,None),
+                    "SDstat"    : (str,8,None),
+                    #"AUXstat"   : (int,9,None)
+                    }
+            try: return read.vals(s,outNew)
+            except:
+                try: return read.vals(s,outOld)
+                except: return None
 
     @staticmethod
     def vals(s,param,l=None,dlm=","):
