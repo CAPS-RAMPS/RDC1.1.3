@@ -68,7 +68,7 @@ from rawFileReader import read
 #Version
 NAME="RAMP Data Cleaner"
 VERSION="1.1.3WIP"
-REVISION="2019-10-28"
+REVISION="2019-10-31"
 
 #Subfolders
 SETTINGS="Settings"
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="run.ini"
+RUNFILE="Greek Test - Aliaksei.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -119,8 +119,10 @@ class runParams(object):
         self.yesterday=datetime.date.today()-datetime.timedelta(days=1)
         self.rampDict=dict() #Maps RAMP number to RAMP object
         self.rParamDict=dict() #e.g. Raw Directory:Paths, Auto Checks:Toggles
+        self.catNameDict=dict()
         self.echemDict=dict()
         self.writeReverseDict() #auto-Populates self.rParamDict
+        self.writeCatNameDict() #auto-Populates self.catNameDict
 
     def __repr__(self):
         #Uniquely represents a runParams object as a string containing
@@ -161,6 +163,20 @@ class runParams(object):
         for key in self.param:
             for subkey in self.param[key]: 
                 self.rParamDict[subkey]=key
+
+    def writeCatNameDict(self):
+        #Creates a Dictionary mapping parameter name to category
+        #e.g. {PTR: [PM010, PM025, PM100]} --> {PM010:PTR, PM025:PTR, PM100:PTR}
+        outputDict=self.param['Output']
+        excludeSet={'Order','Output File Name'} #Headers w/o parsed param names
+        for key in outputDict:
+            if key not in excludeSet:
+                entry=outputDict[key]
+                if type(entry)==list: #Iterate thru param lists if needed to get ea. elem
+                    for value in outputDict[key]:
+                        self.catNameDict[value]=key
+                else:
+                    self.catNameDict[entry]=key #Otherwise just add to reversedict
 
     def loadParams(self):
         print("\nLoading Parameters")
@@ -659,8 +675,9 @@ class calFile(dataFile):
         self.order=order
 
         vals=flatten(params)
-        apStr=('_%s'+',') %str(self.ramp)
-        outStr=apStr.join(vals)
+        apStr='_%s' %str(self.ramp)
+        vals=[x+apStr for x in vals] #Add RAMP No. to every element in list
+        outStr=','.join(vals)
         outStr+='\n'
         self.write(outStr)
 
@@ -2099,7 +2116,7 @@ def readWrite(runInfo,raw,cal,chk=None):
     else: tracker=None
     line=raw.readline() #Get first line of raw file
     while line!="":
-        pDict=parseLine(line,cal,runInfo.rParamDict,tracker) #Turns raw string into value dictionary
+        pDict=parseLine(line,cal,runInfo.catNameDict,tracker) #Turns raw string into value dictionary
         wLine=config4Writing(pDict,cal) #Rewrites dictionary as an output string
         if wLine!=None: cal.write(wLine)  #If valid string, write to processed file
         #elif tracker: tracker.badLine(line)
@@ -2176,7 +2193,6 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
                 raise AttributeError('Feature not implemented:\nscavenging data from corrupted substring')
             else: #Otherwise, pass header and readings to appropriate parser
                 pass2Parser=','.join(expDatLst) #prepare string to be parsed
-                print(pass2Parser)
                 readings=pDict[elem](pass2Parser) #Get output
                 if tracker: readings=tracker.push(elem,readings)
                 #Use a random header for current element as determinant for category
@@ -2186,7 +2202,6 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
                 if catName not in parsedDict:
                     parsedDict[catName]=readings
                 parsedDict[catName].update(readings)
-                print(readings)
                 i+=expLen+1
         else: i+=1
 
@@ -2481,27 +2496,26 @@ def closerDate(dates,lastDate,tgt):
     #both dates are after the target date
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
-#if __name__ == '__main__':
-    #multiprocessing.freeze_support()
-    #init()
-
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+    init()
 
 #Test code: remove later:
-class Struct(object): pass
-cal=Struct()
-cal.date=datetime.date(2019,7,23)
-line='S1037XDATE,07/23/19 00:00:00,CO,223.60,NO,-9.86,NO2,2.27,O3,48.12,CO2,431,T,29.70,RH,37.50,PM1.0,4.25,PM2.5,5.50,PM10,6.00,WD,90.09,WS,0.00,BATT,4.07,CHRG,571.90,RUN,49.94,SD,1,RAW,-30,98,84,115,5,0,0,-36,STAT,6b,0,f0Z'
-templateDict=config.importDict(TEMPLPATH)
-paramDict=templateDict['Output']
-rParamDict=dict()
-for key in paramDict:
-    excludeSet={'Order','Output File Name'}
-    if key not in excludeSet:
-        entry=paramDict[key]
-        if type(entry)==list:
-            for value in paramDict[key]:
-                rParamDict[value]=key
-        else:
-            rParamDict[entry]=key
-#print(rParamDict)
-print(parseLine(line,cal,rParamDict))
+# class Struct(object): pass
+# cal=Struct()
+# cal.date=datetime.date(2019,7,23)
+# line='S1037XDATE,07/23/19 00:00:00,CO,223.60,NO,-9.86,NO2,2.27,O3,48.12,CO2,431,T,29.70,RH,37.50,PM1.0,4.25,PM2.5,5.50,PM10,6.00,WD,90.09,WS,0.00,BATT,4.07,CHRG,571.90,RUN,49.94,SD,1,RAW,-30,98,84,115,5,0,0,-36,STAT,6b,0,f0Z'
+# templateDict=config.importDict(TEMPLPATH)
+# paramDict=templateDict['Output']
+# rParamDict=dict()
+# for key in paramDict:
+#     excludeSet={'Order','Output File Name'}
+#     if key not in excludeSet:
+#         entry=paramDict[key]
+#         if type(entry)==list:
+#             for value in paramDict[key]:
+#                 rParamDict[value]=key
+#         else:
+#             rParamDict[entry]=key
+# #print(rParamDict)
+# print(parseLine(line,cal,rParamDict))

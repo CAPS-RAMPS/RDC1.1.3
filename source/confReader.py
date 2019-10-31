@@ -373,7 +373,8 @@ class config(object):
             @staticmethod
             def fromStr(s):
                 #Converts string in format "yyyy-m-d" to datetime object
-                (y,m,d)=s.split("-")
+                vals=s.split("-")
+                (y,m,d)=vals[0:3] #Assume the first three elements are y-m-d
                 (y,m,d)=(int(y),int(m),int(d))
                 return datetime.date(y,m,d)
 
@@ -385,18 +386,25 @@ class config(object):
                 servExt="-raw" #Suffix of server files
                 chopOff=-1*len(fileExt) #Number of elements to chop off at the end
                 s=s[0:chopOff] #Get rid of file extension
-                if s.endswith(servExt):
+                # Remove suffix of server files, if needed:
+                if s.endswith(servExt): 
                     chopOff=-1*len(servExt) 
                     s=s[0:chopOff]#get rid of server extension
                     return config.pull.dates.fromStr(s) 
-                else: #In case the file is an SD file
-                    #Delimit format YYMMDD into yyyy-mm-dd, check the string
-                    y=int(s[0:2])
-                    m=int(s[2:4])
-                    d=int(s[4:6])
-                    y+=2000 #Bring into current millenium
-                    dateStr="%d-%d-%d" %(y,m,d) #Format as a string yyyy-m-d
-                    return config.pull.dates.fromStr(dateStr) 
+                else: 
+                    #If doesn't have the '-raw' suffix, must be either new RAMP file
+                    #or SD file
+                    try: 
+                        return config.pull.dates.fromStr(s)
+                    except:
+                        #Try to interpret file name in SD format if failed to read as new RAMP file
+                        #Delimit format YYMMDD into yyyy-mm-dd, check the string
+                        y=int(s[0:2])
+                        m=int(s[2:4])
+                        d=int(s[4:6])
+                        y+=2000 #Bring into current millenium
+                        dateStr="%d-%d-%d" %(y,m,d) #Format as a string yyyy-m-d
+                        return config.pull.dates.fromStr(dateStr) 
 
             @staticmethod
             def mixedList(line):
@@ -719,7 +727,7 @@ class config(object):
                             #Return true if at least one valid date file found:
                             if config.verify.date.file(file,filePath): return (True,None)
                             #Check if an element is and SD directory and parse that:
-                            elif os.path.isdir(filePath) and (file in SDdataDirs):
+                            elif (os.path.isdir(filePath) and (file in SDdataDirs)):
                                 sdContents=os.listdir(filePath)
                                 for sdFile in sdContents:
                                     sdFilePath=os.path.join(filePath,sdFile)
@@ -730,7 +738,7 @@ class config(object):
             @staticmethod
             def number(n):
                 rMin=90
-                rMax=500
+                rMax=10000
                 return (type(n)==int and n>=rMin and n<=rMax)
 
             @staticmethod
