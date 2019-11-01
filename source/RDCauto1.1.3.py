@@ -1,5 +1,5 @@
 #_____CHANGE LOG_____#
-    #1.1.3 2019-10-xx
+    #1.1.3 2019-11-xx
         #- Change reading routine to work with v9.13 RAMP firmware
         #- Modify trackers to work with v9.13 RAMP firmware
 
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="Greek Test - Aliaksei.ini"
+RUNFILE="New RAMP Test - RAMP Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -107,9 +107,6 @@ PERFPATH=os.path.join(WORKDIR,PERFORMANCE,PERF)
 
 #________________CLASS DECLARATIONS______________________________#
 
-#Config File Reader
-
-
 #Script Parameters:
 class runParams(object):
 #Contains user inputs that determine how the program will run
@@ -122,7 +119,7 @@ class runParams(object):
         self.catNameDict=dict()
         self.echemDict=dict()
         self.writeReverseDict() #auto-Populates self.rParamDict
-        self.writeCatNameDict() #auto-Populates self.catNameDict
+        #self.writeCatNameDict() #auto-Populates self.catNameDict
 
     def __repr__(self):
         #Uniquely represents a runParams object as a string containing
@@ -663,6 +660,27 @@ class calFile(dataFile):
         super().__init__(ramp,date,path)
         self.echem=ramp.echem
         self.output=ramp.output
+        self.compileParsedRefDicts()
+
+
+    def compileParsedRefDicts(self):
+        #Creates a Dictionary mapping parameter name to category
+        #e.g. {PTR: [PM010, PM025, PM100]} --> {PM010:PTR, PM025:PTR, PM100:PTR}
+        #and a blank dictionary to be used by parseLine function:
+        #e.g {PTR: [PM010, PM025, PM100]} --> {PTR: {PM010: None, PM025: None, PM100: None}}
+        
+        self.catNameDict=dict() #Initialize dictionaries
+        self.parsedBlankDict=dict()
+
+        outputDict=self.output['params'] #Get source dictionary
+
+        for key in outputDict:
+            self.parsedBlankDict[key]=dict()
+            entry=outputDict[key]
+
+            for value in outputDict[key]:
+                self.catNameDict[value]=key
+                self.parsedBlankDict[key][value]=None
 
     def writeStartLine(self):
         #Format: 
@@ -2116,7 +2134,7 @@ def readWrite(runInfo,raw,cal,chk=None):
     else: tracker=None
     line=raw.readline() #Get first line of raw file
     while line!="":
-        pDict=parseLine(line,cal,runInfo.catNameDict,tracker) #Turns raw string into value dictionary
+        pDict=parseLine(line,cal,tracker) #Turns raw string into value dictionary
         wLine=config4Writing(pDict,cal) #Rewrites dictionary as an output string
         if wLine!=None: cal.write(wLine)  #If valid string, write to processed file
         #elif tracker: tracker.badLine(line)
@@ -2147,30 +2165,32 @@ def parseLineOld(line,cal,tracker=None):
         if eParsed: parsedDict[eType]=eParsed
     return parsedDict
 
-def parseLine(line,cal,rParamDict,tracker=None):
-    parsedDict=dict() #Map to store parsed values
-    line=line.split("X") #'X' separates the RAMP number from the data string
-    line=line[1] #Everything after the "X" should constitute valid data
-    line=line.split(",") #Values are comma-delimited
-    #Attempt to locate and parse a valid time stamp:
-    for i in range(len(line)):
-        elem=line[i]
-        if elem.startswith("DATE") and i!=len(line)-1:
-        #Locate a string that says "DATE", assume the next element is the time stamp
-        #Ensure that the "DATE" string is not the last element
-            pass2Parser=','.join(["DATETIME",line[i+1]])
-            dateTime=read.timeStamp(pass2Parser,cal.date)
-            if tracker:  dateTime=tracker.push('DATE',dateTime)
-            if dateTime!=None: 
-                parsedDict['DATE']=dateTime
-                tStampID=i+1 #Store index of time stamp if parsed successfully
-                break
-    try: #If date could not be established, do not read or track line
-        if dateTime==None: return None
-        #Otherwise, attempt to parse everything after the datetime string:
-        else: parseSubstrings(parsedDict,line[i+1:],rParamDict,tracker) 
-        return parsedDict
-    except: return None
+def parseLine(line,cal,tracker=None):
+    parsedDict=copy.deepcopy(cal.parsedBlankDict) #Map to store parsed values
+    if "X" in line:
+        line=line.split("X") #'X' separates the RAMP number from the data string
+        line=line[1] #Everything after the "X" should constitute valid data
+
+    dataStartStr="DATE"
+    startID=line.find(dataStartStr)
+    if startID==-1: return None #Don't read line if no 'DATE' header
+    else: line=line[startID:] #Trim everything before the 'DATE' header
+
+
+    lineList=line.split(",") #Values are comma-delimite
+    #The date header should now be the first element in the list, and the date the second:
+
+    if len(line)>2: #i.e. if there is more than just a time stamp in the line
+        pass2Parser=','.join(['DATE',lineList[1]]) #Second element assumed to be the date
+        dateTime=read.timeStamp(pass2Parser,cal.date)
+        if tracker:  dateTime=tracker.push('DATE',dateTime)
+        if dateTime!=None: parsedDict['DATE']=dateTime #Add to output if time stamp is valid
+
+    readingsID=2 #Third list element onward assumed to be the start of readings (after time stamp)
+
+
+    parseSubstrings(parsedDict,lineList[readingsID:],cal.catNameDict,tracker) 
+    return parsedDict
    
 def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
     #Parse the data string after the time stamp
