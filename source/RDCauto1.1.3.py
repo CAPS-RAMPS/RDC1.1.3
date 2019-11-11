@@ -2209,8 +2209,8 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
                 expLen=1
             expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
             if len(readableSet & set(expDatLst))>1: #i.e. if more than one header in isolated list
-                #TO DO: Try to scavange data from corrupted substring
-                raise AttributeError('Feature not implemented:\nscavenging data from corrupted substring')
+                i+=1
+                continue
             else: #Otherwise, pass header and readings to appropriate parser
                 pass2Parser=','.join(expDatLst) #prepare string to be parsed
                 readings=pDict[elem](pass2Parser) #Get output

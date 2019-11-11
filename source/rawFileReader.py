@@ -610,13 +610,18 @@ class read(object):
             #Convert hexadecimal to binary in statDict:
             for header in statDict:
                 val=statDict[header]
-                statDict[header]=format(val,binForm)
+                if type(val)==int:
+                    statDict[header]=format(val,binForm)
 
             outDict={
-                    "SD"    : statDict["HEX1"][0:3],
-                    "ECREAD": statDict["HEX2"][0:4],
-                    #"PTRCON": statDict["HEX1"][6],
-            }
+                    "SD"    :None,
+                    "ECREAD":None,
+                    }
+            (h1,h2)=(statDict["HEX1"],statDict["HEX2"])
+            if h1:
+                outDict["SD"]=statDict["HEX1"][0:3]
+            if h2:
+                outDict["ECREAD"]=statDict["HEX2"][0:4]
             return outDict
 
 
