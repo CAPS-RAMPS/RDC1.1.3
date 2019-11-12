@@ -68,7 +68,7 @@ from rawFileReader import read
 #Version
 NAME="RAMP Data Cleaner"
 VERSION="1.1.3WIP"
-REVISION="2019-10-31"
+REVISION="2019-11-12"
 
 #Subfolders
 SETTINGS="Settings"
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - RAMP Desktop.ini"
+RUNFILE="New RAMP Test - Home Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -2102,7 +2102,7 @@ def fileWorker(input):
     printOut=runInfo.get("Print Output")
     openIO(raw,cal,printOut,chk)
     writeStartLines(raw,cal,chk)
-    readWrite(runInfo,raw,cal,chk)
+    parseByLine(runInfo,raw,cal,chk)
     closeIO(raw,cal,chk)
 
 def openIO(raw,cal,printOut,chk=None): 
@@ -2126,7 +2126,14 @@ def writeStartLines(raw,cal,chk=None):
     cal.writeStartLine()
     if chk: chk.writeStartLine(raw)
 
-def readWrite(runInfo,raw,cal,chk=None):
+def parseByLine(runInfo,raw,cal,chk=None):
+    #Sifts through each line of data in file
+    #Attempts to parse them
+    #Publishes report when complete (if enabled) 
+    
+    lineStart='ZDATE'
+    lineDlm='Z'
+
     printOut=runInfo.get("Print Output")
     if printOut: print("Processing file:\n%s" %str(raw)) #Print to terminal if option is enabled
     if chk: tracker=errorTracker(runInfo,cal,raw.getSize(),chk) #Initialize error tracker if needed
@@ -2134,10 +2141,11 @@ def readWrite(runInfo,raw,cal,chk=None):
     else: tracker=None
     line=raw.readline() #Get first line of raw file
     while line!="":
-        pDict=parseLine(line,cal,tracker) #Turns raw string into value dictionary
-        wLine=config4Writing(pDict,cal) #Rewrites dictionary as an output string
-        if wLine!=None: cal.write(wLine)  #If valid string, write to processed file
-        #elif tracker: tracker.badLine(line)
+        if lineStart in line: #Check if there are multiple lines between newline characters
+            dataChunk=line.split(lineDlm) #Split into individual data lines
+            for singleLine in dataChunk: #Attempt to parse each line if passed a chunk
+                readWrite(singleLine,cal,tracker)
+        else: readWrite(line,cal,tracker)
         line=raw.readline() #Continue reading lines
     if printOut: print("Processed and published to:\n%s" %str(cal)) 
     #Lets the user know that a file has been processed successfully if option is enabled
@@ -2146,6 +2154,14 @@ def readWrite(runInfo,raw,cal,chk=None):
         if printOut: print("Error report published to:\n%s" %str(chk))
         #let user know that error reports were written successfully (if enabled)
     if printOut: print('\n') #Blank line between reports of processing completion
+
+def readWrite(line,cal,tracker):
+    #Wrapper calling parsing function on a line
+    #a function to arrange parsed data for writing
+    #and a function to write the parsed line
+    pDict=parseLine(line,cal,tracker) #Turns raw string into value dictionary
+    wLine=config4Writing(pDict,cal) #Rewrites dictionary as an output string
+    if wLine!=None: cal.write(wLine)  #If valid string, write to processed file
 
 def parseLineOld(line,cal,tracker=None): 
     parsedDict=dict()
