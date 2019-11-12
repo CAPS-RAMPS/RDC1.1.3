@@ -658,19 +658,22 @@ class rawFile(dataFile):
 class calFile(dataFile):
     def __init__(self,ramp,date,path):
         super().__init__(ramp,date,path)
+        self.echemOrdDict=calFile.convertEchem2OrdDict(ramp.echem)
         self.echem=ramp.echem
         self.output=ramp.output
+        print(self.output)
+        self.blankLine=None         #Defined in self.writeStartLine method
+        self.paramOrder=None        #Defined in self.writeStartLine method
+        self.catNameDict=dict()     #Populated in self.compileParsedRefDicts
+        self.parsedBlankDict=dict() #Populated in self.compileParsedRefDicts
         self.compileParsedRefDicts()
 
 
     def compileParsedRefDicts(self):
         #Creates a Dictionary mapping parameter name to category
         #e.g. {PTR: [PM010, PM025, PM100]} --> {PM010:PTR, PM025:PTR, PM100:PTR}
-        #and a blank dictionary to be used by parseLine function:
+        #and a blank dictionary to be used by config4writing function:
         #e.g {PTR: [PM010, PM025, PM100]} --> {PTR: {PM010: None, PM025: None, PM100: None}}
-        
-        self.catNameDict=dict() #Initialize dictionaries
-        self.parsedBlankDict=dict()
 
         outputDict=self.output['params'] #Get source dictionary
 
@@ -686,29 +689,60 @@ class calFile(dataFile):
         #Format: 
         #([Column Name 1,..., Column Name n], Delimiter in raw file)#
         (params,order)=(copy.copy(self.output['params']),copy.copy(self.output['order']))
-        params["ECHEM"]=self.echem
+        #print(order)
+        wait=input(params)
+        paramHeader=copy.deepcopy(params)
+        paramsHeader["ECHEM"]=self.orderECHEM(params["ECHEM"])
         (params,order)=calFile.orderParams(params,order)
 
-        self.blankLine=calFile.genBlankLine(params)
-        self.order=order
+        #self.catOrder=order
 
         vals=flatten(params)
+        self.paramOrder=vals
         apStr='_%s' %str(self.ramp)
         vals=[x+apStr for x in vals] #Add RAMP No. to every element in list
         outStr=','.join(vals)
         outStr+='\n'
         self.write(outStr)
 
+    def orderECHEM(self,order):
+        newOrder=copy.copy(order)
+        for i in range(len(order)):
+            param=order[i] #parameter (e.g. S1AUX, S1ACT, etc)
+            gasDecode=self.echem[param]
+            newOrder[i]=gasDecode
+        return newOrder
+
+    @staticmethod
+    def convertEchem2OrdDict(echemLine):
+        #Given a list e.g. ["CO","SO2","NO2","O3"] converts to an order dictionary
+        #e.g. {1:CO,2:SO2,3:NO2,4:O3}
+        echemDict=dict()
+        for i in range(len(echemLine)):
+            echemDict[i+1]=echemLine[i]
+        return echemDict
+
+    @staticmethod
+    def getEchemDecode(echemOrdDict):
+        #Converts an order dictionary e.g.{CO:1, SO2:2} into a decode dictionary:
+        #e.g. {S1AUX:COAUX, S2NET:SO2NET}, pulling parameters from a read method
+        #and the order from a list processed by calFile.convertEchem2OrdDict
+        dlm='' #What goes between the gas name and the reading type. e.g. if dlm=='.': CO.AUX
+        endStrLen=3 #Length of the string at the end describing reading type (e.g AUX, NET, ACT)
+        decodeDict=dict()
+        allParams=read.echem.outputParams().keys()
+        for param in allParams:
+            sensor=param[0:-endStrLen] #Get sensor name (e.g. S1, S2, S3, S4)
+            suffix=param[-endStrLen:] #Get the reading suffix ('NET','ACT','AUX')
+            sPlace=int(sensor[1:]) #Get the sensor order by chopping off the "S"
+            gasType=echemOrdDict[sPlace] #Query the gas type of the sensor
+            outStr=gasType+dlm+suffix #Reconstruct str (e.g. COAUX)
+            decodeDict[param]=outStr #Store in dictionary: S1AUX:COAUX
+        return decodeDict
+
     @staticmethod
     def ext(): #file extension (after the date)
         return "-cal.txt"
-
-    @staticmethod
-    def genBlankLine(order):
-        lFormat=[]
-        for element in order:
-            lFormat.append(','*(len(element)-1))
-        return lFormat
 
     @staticmethod
     def orderParams(params,order=None):
@@ -730,6 +764,8 @@ class calFile(dataFile):
                 ordDict[elem]=i
                 i+=1
         return (ordParams,ordDict)
+
+
 
     @staticmethod
     def create(rawFile,runInfo):
@@ -2102,7 +2138,7 @@ def fileWorker(input):
     printOut=runInfo.get("Print Output")
     openIO(raw,cal,printOut,chk)
     writeStartLines(raw,cal,chk)
-    parseByLine(runInfo,raw,cal,chk)
+    readWriteFile(runInfo,raw,cal,chk)
     closeIO(raw,cal,chk)
 
 def openIO(raw,cal,printOut,chk=None): 
@@ -2126,13 +2162,12 @@ def writeStartLines(raw,cal,chk=None):
     cal.writeStartLine()
     if chk: chk.writeStartLine(raw)
 
-def parseByLine(runInfo,raw,cal,chk=None):
+def readWriteFile(runInfo,raw,cal,chk=None):
     #Sifts through each line of data in file
     #Attempts to parse them
     #Publishes report when complete (if enabled) 
     
-    lineStart='ZDATE'
-    lineDlm='Z'
+    dataHeader="DATE"
 
     printOut=runInfo.get("Print Output")
     if printOut: print("Processing file:\n%s" %str(raw)) #Print to terminal if option is enabled
@@ -2141,11 +2176,11 @@ def parseByLine(runInfo,raw,cal,chk=None):
     else: tracker=None
     line=raw.readline() #Get first line of raw file
     while line!="":
-        if lineStart in line: #Check if there are multiple lines between newline characters
-            dataChunk=line.split(lineDlm) #Split into individual data lines
-            for singleLine in dataChunk: #Attempt to parse each line if passed a chunk
-                readWrite(singleLine,cal,tracker)
-        else: readWrite(line,cal,tracker)
+        isolatedLines=line.split(dataHeader) #Try to break up multiple data points between line breaks
+        if len(isolatedLines)>1: #Only try to parse if a "DATE" header was found
+            for singleLine in isolatedLines[1:]:
+            #Go thru points one-by-one (fist element definitely not a data pt, no "DATE" header)
+                    readWriteLine(singleLine,cal,tracker)
         line=raw.readline() #Continue reading lines
     if printOut: print("Processed and published to:\n%s" %str(cal)) 
     #Lets the user know that a file has been processed successfully if option is enabled
@@ -2155,10 +2190,11 @@ def parseByLine(runInfo,raw,cal,chk=None):
         #let user know that error reports were written successfully (if enabled)
     if printOut: print('\n') #Blank line between reports of processing completion
 
-def readWrite(line,cal,tracker):
+def readWriteLine(line,cal,tracker):
     #Wrapper calling parsing function on a line
     #a function to arrange parsed data for writing
     #and a function to write the parsed line
+    print(line)
     pDict=parseLine(line,cal,tracker) #Turns raw string into value dictionary
     wLine=config4Writing(pDict,cal) #Rewrites dictionary as an output string
     if wLine!=None: cal.write(wLine)  #If valid string, write to processed file
@@ -2182,21 +2218,14 @@ def parseLineOld(line,cal,tracker=None):
     return parsedDict
 
 def parseLine(line,cal,tracker=None):
-    parsedDict=copy.deepcopy(cal.parsedBlankDict) #Map to store parsed values
-    if "X" in line:
-        line=line.split("X") #'X' separates the RAMP number from the data string
-        line=line[1] #Everything after the "X" should constitute valid data
-
-    dataStartStr="DATE"
-    startID=line.find(dataStartStr)
-    if startID==-1: return None #Don't read line if no 'DATE' header
-    else: line=line[startID:] #Trim everything before the 'DATE' header
-
+    #Takes a 'decapitated' line, i.e. ",mm/dd/yy,..." to parse
+    #parsedDict=copy.deepcopy(cal.parsedBlankDict) #Map to store parsed values
+    parsedDict=dict()
 
     lineList=line.split(",") #Values are comma-delimite
     #The date header should now be the first element in the list, and the date the second:
 
-    if len(line)>2: #i.e. if there is more than just a time stamp in the line
+    if len(lineList)>2: #i.e. if there is more than just a time stamp in the line
         pass2Parser=','.join(['DATE',lineList[1]]) #Second element assumed to be the date
         dateTime=read.timeStamp(pass2Parser,cal.date)
         if tracker:  dateTime=tracker.push('DATE',dateTime)
@@ -2256,18 +2285,31 @@ def inspectElem(elem,tracker):
 
 def config4Writing(pDict,cal):
     if pDict==None: return None #If whole line couldn't be read (e.g. bad date stamp)
-    params=cal.output['params']
-    order=cal.order #dictionary pre-compiled in the calFile object
-    nLine=copy.copy(cal.blankLine)
-    for key in pDict:
-        if key in params and key in order:
-            place=order[key]
-            subList=copy.copy(params[key])
-            for i in range(len(subList)):
-                item=pDict[key][subList[i]]
-                if checkASCII(str(item)):
-                    subList[i]=item
-            nLine[place]=subList
+    blankDict=cal.parsedBlankDict
+    print(cal.ramp.output)
+    wait=input(cal.output)
+
+    # params=cal.output['params']
+    # order=cal.order #dictionary pre-compiled in the calFile object
+    # nLine=copy.copy(cal.blankLine)
+
+    # print(pDict)
+    # print('/n')
+    # print(params)
+    # print('/n')
+    # print(order)
+    # print('/n')
+    # wait=input(nLine)
+
+    # for key in pDict:
+    #     if key in params and key in order:
+    #         place=order[key]
+    #         subList=copy.copy(params[key])
+    #         for i in range(len(subList)):
+    #             item=pDict[key][subList[i]]
+    #             if checkASCII(str(item)):
+    #                 subList[i]=item
+    #         nLine[place]=subList
     nLine=flatten(nLine)
     nLine=stringify(nLine)
     dlm=","
@@ -2555,3 +2597,7 @@ if __name__ == '__main__':
 #             rParamDict[entry]=key
 # #print(rParamDict)
 # print(parseLine(line,cal,rParamDict))
+
+# import cProfile
+# import pstats
+# cProfile.run('for i in range(20): init()','test')
