@@ -20,7 +20,9 @@ class read(object):
         opt={
             "RAW"   : 8,
             "STAT"  : 3,
-            "MET"   : 2
+            "MET"   : 2,
+            "TSI"   : 21,
+            "ADI"   : 9
             }
 
         return opt
@@ -56,10 +58,10 @@ class read(object):
             "MET"   : read.met,
             "TSI"   : read.tsi,
             "ADI"   : read.adi,
-            "PPA"   : read.ppa.line,
-            "PTR"   : read.ptr.old,
+            # "PPA"   : read.ppa.line,
+            # "PTR"   : read.ptr.old,
             "STAT"  : read.stat.new,
-            "BCM"   : read.bcm
+            # "BCM"   : read.bcm
             }
         return opt
 
@@ -68,7 +70,7 @@ class read(object):
         try:
             maxDateError=datetime.timedelta(days=2) 
             #Date stamps in file may be off from file date by this amount
-            s=s.split(',')[1] #After splitting, s=['DATETIME',datetime]
+            #s=s.split(',')[1] #After splitting, s=['DATETIME',datetime]
             (date,time)=s.split(' ')
 
             (m,d,y)=date.split("/")
@@ -113,8 +115,8 @@ class read(object):
     @staticmethod
     def singleVal(s):
         try:
-            sTemp=s.split(',')
-            header=sTemp[0]
+            #sTemp=s.split(',')
+            header=s[0]
             out={header : (float,1,None)}
             try: return read.vals(s,out,2)
             except: return out #Return empty dictionary if could not be parsed but connected
@@ -129,7 +131,7 @@ class read(object):
                     ,"S4NET": None
                     }
             try:
-                s=s.split(",")
+                #s=s.split(",")
                 #print(s)
                 #if (len(s)!=2*len(dOut)+2) and (len(s)!=2*len(dOut)+1): 
                 #    return dOut #Rejects unexpected line lengths
@@ -153,8 +155,8 @@ class read(object):
         @staticmethod
         def cal(s):
             try:
-                sTemp=s.split(',')
-                gasID=sTemp[0] #The header is the gas name
+                #sTemp=s.split(',')
+                gasID=s[0] #The header is the gas name
                 calSuf="CAL" #Suffix added to 'calibrated' gas headers
                 gasCalName=read.echem.place(gasID,calSuf)
                 out={gasCalName : (float,1,None)}
@@ -243,7 +245,7 @@ class read(object):
                     'PM100B': None
                     }
             elemStr=elem #Store a copy of string for newLine
-            elem=elem.split(',')
+            #elem=elem.split(',')
             if elem[0]=='PPA':
                 elem=elem[1:] #Removes the 'PPA'
             nElemNewCln=13 #Max n(elements) in new RAMP-PPA firm, but old PPA firm
@@ -532,8 +534,8 @@ class read(object):
                             "PM10"  : "PM100"
                             }
             try: 
-                sTemp=s.split(',')
-                header=sTemp[0]
+                #sTemp=s.split(',')
+                header=s[0]
                 header=headerChange[header] #Change header as seen in map above
                 out={header : (float,1,None)}
                 try: return read.vals(s,out,2)
@@ -599,8 +601,9 @@ class read(object):
         def new(s):
             endChar='Z' #Character appended to end of every data line
             binForm="08b" #Format integer as 8-bit binary number
-            if s.endswith(endChar):
-                s=s[0:-1] #Chop off end character if just denoting end of line
+            endVal=s[len(s)-1]
+            if endVal.endswith(endChar):
+                s[len(s)-1]=endVal[0:-1] #Chop off end character if just denoting end of line
             statDict={
                 "HEX1"  : (partial(int,base=16),1,None),
                 "HEX2"  : (partial(int,base=16),2,None),
@@ -659,13 +662,12 @@ class read(object):
         #As well as a string of values
         #Delimits the string, and attempts to populate the dictionary with:
         #Element from the string in place P, converted to data type D, and multiplied by M
-        s=s.split(dlm)
+        #s=s.split(dlm)
         if l!=None and len(s)!=l: return None #Does not parse if the list is of unexpected length
         for key in param:
             (dType,place,mult)=(param[key][0],param[key][1],param[key][2])
             #(data Type to convert to, place in list, multiplier)
             try: 
-                val=dType(s[place])
                 if mult!=None: val*=mult #In case data type is a string, or such
                 if type(val)==float: #Rounds values to 2 or 3 dec. places, depending on magnitude
                     if abs(val)<10: val=round(val,2)

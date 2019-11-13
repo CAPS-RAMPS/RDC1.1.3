@@ -2226,8 +2226,8 @@ def parseLine(line,cal,tracker=None):
     #The date header should now be the first element in the list, and the date the second:
 
     if len(lineList)>2: #i.e. if there is more than just a time stamp in the line
-        pass2Parser=','.join(['DATE',lineList[1]]) #Second element assumed to be the date
-        dateTime=read.timeStamp(pass2Parser,cal.date)
+        #pass2Parser=','.join(['DATE',lineList[1]]) #Second element assumed to be the date
+        dateTime=read.timeStamp(lineList[1],cal.date)
         if tracker:  dateTime=tracker.push('DATE',dateTime)
         if dateTime!=None: parsedDict['DATE']=dateTime #Add to output if time stamp is valid
 
@@ -2244,7 +2244,7 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
     eLenDict=read.expectedLengths() #Get map of readable headers:expected number of outputs
     readableSet=pDict.keys()
     i=0 #Start immediately after the time stamp
-    while i<len(line)-1:
+    while i<(len(line)-1):
         elem=line[i]
         if elem in readableSet: #if header is known by the reader, attempt to parse
             #If header is in the map of expected lengths, reterieve that value:
@@ -2253,12 +2253,18 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
             else: #Otherwise, assume there is only one
                 expLen=1
             expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
-            if len(readableSet & set(expDatLst))>1: #i.e. if more than one header in isolated list
+            multiHeader=len(readableSet & set(expDatLst))>1 
+            if multiHeader:#i.e. if more than one header in isolated list
                 i+=1
                 continue
-            else: #Otherwise, pass header and readings to appropriate parser
-                pass2Parser=','.join(expDatLst) #prepare string to be parsed
-                readings=pDict[elem](pass2Parser) #Get output
+                
+            else:#Otherwise, try to parse
+                #pass2Parser=','.join(expDatLst) #prepare string to be parsed
+                readings=pDict[elem](expDatLst) #Get output
+                if readings==None:
+                    #Continue to next parameter if could not be parsed
+                    i+=1
+                    continue
                 if tracker: readings=tracker.push(elem,readings)
                 #Use a random header for current element as determinant for category
                 #(all headers in 'readings' should be in the same category)
@@ -2383,10 +2389,13 @@ def str2TimeDelta(s):
 
 def stringify(L):
 #Turns lists/sets of integers,floats, etc. into list of strings
-    newL=[]
-    for item in L:
-        if item==None: newL.append("")
-        else: newL.append(str(item))
+    nElem=len(L)
+    newL=[""]*nElem #preallocate a new list of empty strings
+    for i in range(nElem):
+        item=L[i]
+        if item!=None:
+            try: newL[i]=str(item)
+            except: pass
     return newL
 
 def removeChars(s,toRemove):
