@@ -2248,16 +2248,16 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
         elem=line[i]
         if elem in readableSet: #if header is known by the reader, attempt to parse
             #If header is in the map of expected lengths, reterieve that value:
-            if elem in eLenDict:
-                expLen=eLenDict[elem]
+            if elem in eLenDict: expLen=eLenDict[elem]
             else: #Otherwise, assume there is only one
                 expLen=1
+
             expDatLst=line[i:i+expLen+1] #Isolate data thought to be pertinent to the header
             multiHeader=len(readableSet & set(expDatLst))>1 
             if multiHeader:#i.e. if more than one header in isolated list
                 i+=1
                 continue
-                
+
             else:#Otherwise, try to parse
                 #pass2Parser=','.join(expDatLst) #prepare string to be parsed
                 readings=pDict[elem](expDatLst) #Get output
@@ -2596,4 +2596,4 @@ def closerDate(dates,lastDate,tgt):
 
 import cProfile
 import pstats
-cProfile.run('for i in range(20): init()','test')
+cProfile.run('init()','test')
