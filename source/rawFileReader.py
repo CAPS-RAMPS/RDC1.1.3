@@ -668,6 +668,7 @@ class read(object):
             (dType,place,mult)=(param[key][0],param[key][1],param[key][2])
             #(data Type to convert to, place in list, multiplier)
             try: 
+                val=dType(s[place])
                 if mult!=None: val*=mult #In case data type is a string, or such
                 if type(val)==float: #Rounds values to 2 or 3 dec. places, depending on magnitude
                     if abs(val)<10: val=round(val,2)

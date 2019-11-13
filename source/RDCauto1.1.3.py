@@ -2257,7 +2257,6 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
             if multiHeader:#i.e. if more than one header in isolated list
                 i+=1
                 continue
-
             else:#Otherwise, try to parse
                 #pass2Parser=','.join(expDatLst) #prepare string to be parsed
                 readings=pDict[elem](expDatLst) #Get output
