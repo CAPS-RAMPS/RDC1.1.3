@@ -68,7 +68,7 @@ from rawFileReader import read
 #Version
 NAME="RAMP Data Cleaner"
 VERSION="1.1.3WIP"
-REVISION="2019-11-12"
+REVISION="2019-11-13"
 
 #Subfolders
 SETTINGS="Settings"
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - Home Desktop.ini"
+RUNFILE="New RAMP Test - RAMP Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -659,9 +659,10 @@ class calFile(dataFile):
     def __init__(self,ramp,date,path):
         super().__init__(ramp,date,path)
         self.echemOrdDict=calFile.convertEchem2OrdDict(ramp.echem)
+        self.echemDecode=None          #Defined in self.writeStartLine method
         self.echem=ramp.echem
         self.output=ramp.output
-        print(self.output)
+
         self.blankLine=None         #Defined in self.writeStartLine method
         self.paramOrder=None        #Defined in self.writeStartLine method
         self.catNameDict=dict()     #Populated in self.compileParsedRefDicts
@@ -689,19 +690,20 @@ class calFile(dataFile):
         #Format: 
         #([Column Name 1,..., Column Name n], Delimiter in raw file)#
         (params,order)=(copy.copy(self.output['params']),copy.copy(self.output['order']))
-        #print(order)
-        wait=input(params)
-        paramHeader=copy.deepcopy(params)
+
+        self.echemDecode=calFile.getEchemDecode(params["ECHEM"],self.echemOrdDict)
+        paramsHeader=copy.deepcopy(params)
         paramsHeader["ECHEM"]=self.orderECHEM(params["ECHEM"])
-        (params,order)=calFile.orderParams(params,order)
 
-        #self.catOrder=order
+        (params,orderDict)=calFile.orderParams(params,order)
+        paramsHeader=calFile.orderParams(paramsHeader,order)[0]
 
-        vals=flatten(params)
-        self.paramOrder=vals
+        headerList=flatten(paramsHeader)
+        self.paramOrder=flatten(params)
+
         apStr='_%s' %str(self.ramp)
-        vals=[x+apStr for x in vals] #Add RAMP No. to every element in list
-        outStr=','.join(vals)
+        headerList=[x+apStr for x in headerList] #Add RAMP No. to every element in list
+        outStr=','.join(headerList)
         outStr+='\n'
         self.write(outStr)
 
@@ -709,7 +711,7 @@ class calFile(dataFile):
         newOrder=copy.copy(order)
         for i in range(len(order)):
             param=order[i] #parameter (e.g. S1AUX, S1ACT, etc)
-            gasDecode=self.echem[param]
+            gasDecode=self.echemDecode[param]
             newOrder[i]=gasDecode
         return newOrder
 
@@ -723,17 +725,16 @@ class calFile(dataFile):
         return echemDict
 
     @staticmethod
-    def getEchemDecode(echemOrdDict):
+    def getEchemDecode(echemQuery,echemOrdDict):
         #Converts an order dictionary e.g.{CO:1, SO2:2} into a decode dictionary:
         #e.g. {S1AUX:COAUX, S2NET:SO2NET}, pulling parameters from a read method
         #and the order from a list processed by calFile.convertEchem2OrdDict
         dlm='' #What goes between the gas name and the reading type. e.g. if dlm=='.': CO.AUX
         endStrLen=3 #Length of the string at the end describing reading type (e.g AUX, NET, ACT)
         decodeDict=dict()
-        allParams=read.echem.outputParams().keys()
-        for param in allParams:
+        for param in echemQuery:
             sensor=param[0:-endStrLen] #Get sensor name (e.g. S1, S2, S3, S4)
-            suffix=param[-endStrLen:] #Get the reading suffix ('NET','ACT','AUX')
+            suffix=param[-endStrLen:] #Get the reading suffix ('CAL','NET','ACT','AUX')
             sPlace=int(sensor[1:]) #Get the sensor order by chopping off the "S"
             gasType=echemOrdDict[sPlace] #Query the gas type of the sensor
             outStr=gasType+dlm+suffix #Reconstruct str (e.g. COAUX)
@@ -2194,7 +2195,6 @@ def readWriteLine(line,cal,tracker):
     #Wrapper calling parsing function on a line
     #a function to arrange parsed data for writing
     #and a function to write the parsed line
-    print(line)
     pDict=parseLine(line,cal,tracker) #Turns raw string into value dictionary
     wLine=config4Writing(pDict,cal) #Rewrites dictionary as an output string
     if wLine!=None: cal.write(wLine)  #If valid string, write to processed file
@@ -2286,32 +2286,19 @@ def inspectElem(elem,tracker):
 def config4Writing(pDict,cal):
     if pDict==None: return None #If whole line couldn't be read (e.g. bad date stamp)
     blankDict=cal.parsedBlankDict
-    print(cal.ramp.output)
-    wait=input(cal.output)
 
-    # params=cal.output['params']
-    # order=cal.order #dictionary pre-compiled in the calFile object
-    # nLine=copy.copy(cal.blankLine)
+    nParams=len(cal.paramOrder)
+    outList=len(cal.paramOrder)*[None] #Preallocate list to store output vars
+    for i in range(nParams):
+    #go through output params one by one
+        paramName=cal.paramOrder[i]
+        catName=cal.catNameDict[paramName]
+        if (catName in pDict) and (paramName in pDict[catName]):
+        #If value has been assigned in parsed dictionary to the variable,
+        #add it to the output list
+            outList[i]=pDict[catName][paramName]
 
-    # print(pDict)
-    # print('/n')
-    # print(params)
-    # print('/n')
-    # print(order)
-    # print('/n')
-    # wait=input(nLine)
-
-    # for key in pDict:
-    #     if key in params and key in order:
-    #         place=order[key]
-    #         subList=copy.copy(params[key])
-    #         for i in range(len(subList)):
-    #             item=pDict[key][subList[i]]
-    #             if checkASCII(str(item)):
-    #                 subList[i]=item
-    #         nLine[place]=subList
-    nLine=flatten(nLine)
-    nLine=stringify(nLine)
+    nLine=stringify(outList)
     dlm=","
     nLine=dlm.join(nLine)+"\n"
     return nLine
@@ -2574,9 +2561,9 @@ def closerDate(dates,lastDate,tgt):
     #both dates are after the target date
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
-if __name__ == '__main__':
-    multiprocessing.freeze_support()
-    init()
+# if __name__ == '__main__':
+#     multiprocessing.freeze_support()
+#     init()
 
 #Test code: remove later:
 # class Struct(object): pass
@@ -2598,6 +2585,6 @@ if __name__ == '__main__':
 # #print(rParamDict)
 # print(parseLine(line,cal,rParamDict))
 
-# import cProfile
-# import pstats
-# cProfile.run('for i in range(20): init()','test')
+import cProfile
+import pstats
+cProfile.run('for i in range(20): init()','test')
