@@ -58,10 +58,10 @@ class read(object):
             "MET"   : read.met,
             "TSI"   : read.tsi,
             "ADI"   : read.adi,
-            # "PPA"   : read.ppa.line,
+            "PPA"   : read.ppa.line,
             # "PTR"   : read.ptr.old,
             "STAT"  : read.stat.new,
-            # "BCM"   : read.bcm
+            "BCM"   : read.bcm
             }
         return opt
 
@@ -614,8 +614,8 @@ class read(object):
             for header in statDict:
                 val=statDict[header]
                 if type(val)==int:
-                    statDict[header]=format(val,binForm)
-
+                    statDict[header]=format(val,binForm) #Convert to binary string
+                    statDict[header]=statDict[header][::-1] #Reverse binary string so that slicing can be used
             outDict={
                     "SD"    :None,
                     "ECREAD":None,

@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - RAMP Desktop.ini"
+RUNFILE="New RAMP Test - Home Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -803,8 +803,8 @@ class errorTracker(object):
         self.file=errorFile
         self.remove=runInfo.get("Auto Remove")
         self.dispEphErr=runInfo.get("Show Instantaneous Errors")
-        self.echem=cal.echem
-        self.params=set(cal.order.keys())
+        self.echem=cal.echemDecode
+        #self.params=set(cal.order.keys())
         self.loadCriteria()
         self.loadConst()
         self.setErrorTracking(runInfo)
@@ -812,9 +812,18 @@ class errorTracker(object):
     def loadCriteria(self):
         #Parses the CRITERIA file in the program's directory to determine
         #criteria for throwing error flags
-        self.pSet=  {"CO2","T","RH","P","CO","SO2","NO","NO2","O3","VOC",
-                    "BATT","MET","CPC","CPCFLOW","CPC_T",
-                    "CPCPULSE","PM010","PM025","PM100"}
+        self.pSet=  {"CO2",
+                    "T","RH","P",
+                    "CONET","COCAL",
+                    "SO2NET","SO2CAL",
+                    "NONET","NOCAL",
+                    "NO2NET","NO2CAL",
+                    "O3NET","O3CAL",
+                    "VOCNET","VOCCAL",
+                    "BATT","CHRG","RUN",
+                    "MET","PM010","PM025","PM100",
+                    "WS","WD",
+                    "CPC","CPCFLOW","CPC_T","CPCPULSE"}
         #Parameters that the parser will look for in the criteria file
         self.bDict=dict() #stores criteria with parameters in pSet as keys
         crit=CRITPATH
@@ -874,12 +883,19 @@ class errorTracker(object):
         collectionDict= { # Maps category to which criteria it requires for error tracking
                         "DATE": [],
                         "CO2":  ["CO2","T","RH"],
-                        "ECHEM":["CO","SO2","NO","NO2","O3","VOC"],
+                        "ECHEM":["CONET","COCAL",
+                                 "SO2NET","SO2CAL",
+                                 "NONET","NOCAL",
+                                 "NO2NET","NO2CAL",
+                                 "O3NET","O3CAL",
+                                 "VOCNET","VOCCAL"],
                         "TSI":  ["CPC","CPC_T","CPCPULSE"],
                         "ADI":  ["CPCFLOW"],
                         "MET":  ["MET"],
-                        "BATT": ["BATT"],
+                        "PWR":  ["BATT","CHRG","RUN"],
+                        "PTR":  ["PM010","PM025","PM100"],
                         "PPA":  ["T","RH","P","PM010","PM025","PM100"],
+                        "WIND": ["WS","WD"],
                         "STAT": []  
                         }
         for key in collectionDict:
@@ -914,7 +930,9 @@ class errorTracker(object):
                 ,"TSI":     tsiTracker(runInfo,"TSI",bDict["TSI"],cDict["TSI"])
                 ,"ADI":     adiTracker(runInfo,"ADI",bDict["ADI"],cDict["ADI"])
                 ,"PPA":     ppaTracker(runInfo,"PPA",bDict["PPA"],cDict["PPA"])
-                ,"BATT":    battTracker(runInfo,"BATT",bDict["BATT"],cDict["BATT"])
+                ,"PTR":     valTracker(runInfo,"PTR",bDict["PTR"],cDict["PTR"])
+                ,"WIND":    valTracker(runInfo,"WIND",bDict["WIND"],cDict["WIND"])
+                ,"PWR":     battTracker(runInfo,"PWR",bDict["PWR"],cDict["PWR"])
                 ,"STAT":    statTracker(runInfo,"STAT",bDict["STAT"],cDict["STAT"])
                 }
 
@@ -1538,9 +1556,8 @@ class tGapTracker(object):
 class eChemTracker(valTracker):
     def __init__(self,runInfo,name,crit,const,echem):
         super().__init__(runInfo,name,crit,const)
-        self.echem=eChemTracker.setEchem(echem)
         self.decode=echem
-        self.encode=reverseDict(self.echem)
+        self.encode=reverseDict(self.decode)
         self.setupddt()
 
     def push(self,val,time,dt):
@@ -1549,22 +1566,11 @@ class eChemTracker(valTracker):
         if type(pushReturn)==dict: return eChemTracker.encode(pushReturn,self.encode)
         else: return pushReturn
 
-    @staticmethod
-    def setEchem(echem):
-        #Encodes a dictionary that maps sensor place to sensor type
-        #e.g. S1:CO, S2:SO2, S3:NO2, etc.
-        echemDict=dict()
-        nSens=4 #Number of sensors
-        for i in range(nSens):
-            sensNum="S"+str(i+1) #Converts place 0 to S1, place 1 to S2, etc.
-            echemDict[sensNum]=echem[i] #S1:echem[0]
-        return echemDict
-
     def decodeEchem(self,val):
         #Converst S1:60, S2: 30, etc. to e.g. CO:60, SO2: 30, etc.
         newDict=dict()
         for key in val:
-            corrKey=self.echem[key] #Reads map of e.g. S1:CO, S2:SO2
+            corrKey=self.decode[key] #Reads map of e.g. S1:CO, S2:SO2
             newDict[corrKey]=val[key] #Applies the map
         return newDict
 
@@ -1577,7 +1583,8 @@ class eChemTracker(valTracker):
 
     def setupddt(self):
         self.ddtOn=True
-        for gas in self.decode:
+        for sensor in self.decode:
+            gas=self.decode[sensor]
             self.ddt[gas]=ddtTracker(critT=self.crit[gas]["spikeT"])
 
 class co2Tracker(valTracker):
@@ -1712,7 +1719,7 @@ class battTracker(valTracker):
     def push(self,val,time,dt):
         if val:
             super().push(val,time,dt)
-            self.checkFlag(time)
+            #self.checkFlag(time)
             self.checkPowerLoss(time)
             return self.vals["output"]
         return None
@@ -1780,29 +1787,29 @@ class statTracker(valTracker):
                 return None
             self.vals["current"]=val
             self.checkConn(time,dt)
-            self.checkFlag(time,"recharge",0,{1 : "SIM DEPLETED"})
             self.checkSD(time)
-            self.checkSignal(time)
-        return None
+            self.checkECREAD(time)
+        return val
 
     def checkSD(self,time):
-        sdFlag=self.vals["current"]["SDstat"]
+        sdFlag=self.vals["current"]["SD"]
         if sdFlag==None: return
-        elif len(sdFlag)==2: #i.e. flag is from old firmware
-            if sdFlag[0]=="1": self.eFlags["SDstat"]["NO SD"].append(time)
-            elif sdFlag[1]=="1": self.eFlags["SDstat"]["SD ERROR"].append(time)
-        elif len(sdFlag)==3: #i.e. if new firmware
-            if sdFlag[0]=="0":  self.eFlags["SDstat"]["NO SD"].append(time)
-            elif sdFlag[1]=="0":self.eFlags["SDstat"]["SD INIT ERROR"].append(time)
-            elif sdFlag[2]=="1":self.eFlags["SDstat"]["SD ERROR"].append(time)
+        elif sdFlag[0]=="0":self.eFlags["SD"]["SD INIT ERROR"].append(time)
+        elif sdFlag[1]=="0":self.eFlags["SD"]["NO SD"].append(time)
+        elif sdFlag[2]=="1":self.eFlags["SD"]["SD ERROR"].append(time)
 
-    def checkSignal(self,time):
-        if type(self.vals["current"]["signal"])==int and  self.vals["current"]["signal"]<10: 
-                self.eFlags["signal"]["LOW"].append(time) 
+    def checkECREAD(self,time):
+        ecFlag=self.vals["current"]["ECREAD"]
+        if ecFlag==None: return
+        elif ecFlag[0]=="1": self.eFlags["ECREAD"]["S1ERROR"].append(time)
+        elif ecFlag[1]=="1": self.eFlags["ECREAD"]["S2ERROR"].append(time)
+        elif ecFlag[2]=="1": self.eFlags["ECREAD"]["S3ERROR"].append(time)
+        elif ecFlag[3]=="1": self.eFlags["ECREAD"]["S4ERROR"].append(time)
 
     def initializeFlags(self):
-        self.eFlags["SDstat"]={"NO SD": list(), "SD ERROR": list(), "SD INIT ERROR": list()}
-        self.eFlags["signal"]={"LOW": list()}
+        self.eFlags["SD"]={"NO SD": list(), "SD ERROR": list(), "SD INIT ERROR": list()}
+        self.eFlags["ECREAD"]={"S1ERROR": list(),"S2ERROR": list(),
+                               "S3ERROR": list(),"S4ERROR": list()}
 
 class ddtTracker(object):
     #Keeps a small list of values, derivatives, and times on hand for average derivatives,
