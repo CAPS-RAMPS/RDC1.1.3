@@ -68,7 +68,7 @@ from rawFileReader import read
 #Version
 NAME="RAMP Data Cleaner"
 VERSION="1.1.3WIP"
-REVISION="2019-11-13"
+REVISION="2019-12-17"
 
 #Subfolders
 SETTINGS="Settings"
@@ -954,9 +954,14 @@ class errorTracker(object):
         #Handles writing to the error checks file
         if self.file:
             dateTracker=self.subTrackers["DATE"]
-            self.file.write("\t<_Begin Report_>\n")
+            self.file.write("\t<_Begin Report_>")
+            #Publish Time Stamp Information First
+            dateTracker.publish(self.file,self.dispEphErr,dateTracker)
             for key in self.subTrackers:
-                self.subTrackers[key].publish(self.file,self.dispEphErr,dateTracker)
+                if key!="DATE": #Ensure Time stamp information is not published twice
+                    self.subTrackers[key].publish(  self.file,
+                                                    self.dispEphErr,
+                                                    dateTracker)
             self.file.write("\n\t<_End Report_>\n\n")
 
     @staticmethod
@@ -1018,11 +1023,14 @@ class valTracker(object):
     def push(self,val,time,dt):
         #Gives the tracker a new set of values to analyze
         if val!=None:
+            print("Push Successful")
+            wait=input(','.join([str(val),str(time),str(dt)]))
             self.vals["last"]=self.vals["current"] #Updates self.vals
             self.vals["current"]=val #Sets the current readings to what was pushed to the object
             self.vals["output"]=copy.deepcopy(self.vals["current"]) #Output line will be cleaned by checkAgainstCriteria()
-            if self.autoChecks: self.checkConn(time,dt)
-            if self.autoChecks: self.checkParsed(time,dt)
+            if self.autoChecks: 
+                self.checkConn(time,dt)
+                self.checkParsed(time,dt)
             self.timeDerivative(time,dt)
             self.checkAgainstCriteria(time,dt)
             return self.vals["output"]
@@ -1504,7 +1512,7 @@ class tGapTracker(object):
     def publish(self,file,*args):
         #writes out the gap report
         if file:
-            file.write("\tTime Gaps:")
+            file.write("\n\tTime Gaps:")
             file.write(self.publishFlags())
             file.write("\n\t\tFile Start:\t%s" %str(self.stamp["start"]))
             file.write("\n\t\tFile End:\t%s" %str(self.stamp["end"]))
@@ -1710,7 +1718,6 @@ class ppaTracker(valTracker):
 class battTracker(valTracker):
     def __init__(self,runInfo,name,crit,const):
         super().__init__(runInfo,name,crit,const)
-        self.flagNames={"STAT"}
         self.setupddt()
         #(avg. derivative criterion for DRAIN FLAG, min. volt. crit. for DRAIN FLAG, 
         # min. volt for LOW FLAG)
@@ -1723,15 +1730,6 @@ class battTracker(valTracker):
             self.checkPowerLoss(time)
             return self.vals["output"]
         return None
-
-    def checkFlag(self,time):
-        #Special function to verify battery error flags 
-        okFlags={"A/C","OK","BATTPWR"} #Flags which do not require an error to be dispayed
-        if "STAT" not in self.eFlags: self.eFlags["STAT"]=dict() #Declare stat error dict if absent
-        flag=self.vals["current"]["STAT"]
-        if flag!=None and flag not in okFlags:
-            if flag in self.eFlags["STAT"]: self.eFlags["STAT"][flag].append(time)
-            else: self.eFlags["STAT"][flag]=[time]
 
     def checkPowerLoss(self,time):
         #Checks for power loss by monitoring battery voltage and its average change
@@ -1754,26 +1752,10 @@ class battTracker(valTracker):
 
     def setupddt(self):
         self.ddtOn=True
-        self.ddt={"BATT":ddtTracker(critT=self.const["ddtTrackLen"],
-                                    critLen=self.const["ddtNumPts"])}
-
-    @staticmethod
-    def makeBattSubDict():
-        #Constructs the battery error dictionary based on the facts that:
-        #reading is in the form XYZ where
-        #X: Temp Status – 0 if temp below -20°C, which disables charging
-        #Y: Charge Status – 1 when battery voltage below 3.6V
-        #Z: Fault Status – 1 when battery good; 0 if battery disconnected or fault
-        outDict=dict()
-        numVals=2
-        for ones in range(numVals):
-            for tens in range(numVals):
-                for hundreds in range(numVals):
-                    code=100*hundreds+10*tens+ones
-                    if ones==0: outDict[code]="FAULT"
-                    elif hundreds==0: outDict[code]="COLD"
-                    elif tens==1: outDict[code]=None   
-        return outDict
+        self.ddt={  
+                "BATT"  :ddtTracker(critT=self.const["ddtTrackLen"],
+                                    critLen=self.const["ddtNumPts"])
+                }
 
 class statTracker(valTracker):
     def __init__(self,runInfo,name,crit,const):
@@ -2271,7 +2253,9 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
                     #Continue to next parameter if could not be parsed
                     i+=1
                     continue
-                if tracker: readings=tracker.push(elem,readings)
+                if tracker: 
+                    print(elem,readings)
+                    readings=tracker.push(elem,readings)
                 #Use a random header for current element as determinant for category
                 #(all headers in 'readings' should be in the same category)
                 randHeader=next(iter(readings.keys())) #Random header from output
@@ -2576,30 +2560,6 @@ def closerDate(dates,lastDate,tgt):
     #both dates are after the target date
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
-# if __name__ == '__main__':
-#     multiprocessing.freeze_support()
-#     init()
-
-#Test code: remove later:
-# class Struct(object): pass
-# cal=Struct()
-# cal.date=datetime.date(2019,7,23)
-# line='S1037XDATE,07/23/19 00:00:00,CO,223.60,NO,-9.86,NO2,2.27,O3,48.12,CO2,431,T,29.70,RH,37.50,PM1.0,4.25,PM2.5,5.50,PM10,6.00,WD,90.09,WS,0.00,BATT,4.07,CHRG,571.90,RUN,49.94,SD,1,RAW,-30,98,84,115,5,0,0,-36,STAT,6b,0,f0Z'
-# templateDict=config.importDict(TEMPLPATH)
-# paramDict=templateDict['Output']
-# rParamDict=dict()
-# for key in paramDict:
-#     excludeSet={'Order','Output File Name'}
-#     if key not in excludeSet:
-#         entry=paramDict[key]
-#         if type(entry)==list:
-#             for value in paramDict[key]:
-#                 rParamDict[value]=key
-#         else:
-#             rParamDict[entry]=key
-# #print(rParamDict)
-# print(parseLine(line,cal,rParamDict))
-
-import cProfile
-import pstats
-cProfile.run('init()','test')
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+    init()
