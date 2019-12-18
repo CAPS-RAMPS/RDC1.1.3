@@ -332,8 +332,8 @@ class RAMP(object):
     def addDirs(self,paths):
         #Check paths for server and SD, allocate appropriately to self.dirs dict
         for path in paths:
-            if path.endswith("s%d"%(self.num)): self.dirs["Server"].add(path)
-            else: self.dirs["SD"].add(path)
+            if config.verify.path.isSD(path):self.dirs["SD"].add(path)
+            else: self.dirs["Server"].add(path)
 
     @staticmethod
     def nums(rampSet):

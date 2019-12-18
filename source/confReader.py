@@ -190,6 +190,15 @@ class config(object):
                     else: #If cannot combine raise error
                         raise TypeError("Cannot combine %s and %s" %(str(tgtType),str(mrgType)))
         return dTgt
+    
+    @staticmethod
+    def writeReverseDict(fDict):
+        #Takes a dictionary and switches the keys and values places
+        rDict=dict() #Stores the reverse dictionary
+        for key in fDict:
+            for subkey in fDict[key]: #Map each entry in dictionary to its key 
+                rDict[subkey]=key #(as opposed key ->entry)
+        return rDict
 
     class pull(object):
         #Organizes functions used to convert values to dictionary entries
@@ -488,15 +497,6 @@ class config(object):
                         dates=dates|config.pull.dates.fromDir(rampDir)
                 return dates
 
-    @staticmethod
-    def writeReverseDict(fDict):
-        #Takes a dictionary and switches the keys and values places
-        rDict=dict() #Stores the reverse dictionary
-        for key in fDict:
-            for subkey in fDict[key]: #Map each entry in dictionary to its key 
-                rDict[subkey]=key #(as opposed key ->entry)
-        return rDict
-
     class verify(object):
         @staticmethod
         def complete(fDict,template,dependencies,directory):
@@ -733,6 +733,15 @@ class config(object):
                                     sdFilePath=os.path.join(filePath,sdFile)
                                     if config.verify.date.file(sdFile,sdFilePath): return(True,None)
                 return (False,error)
+
+            @staticmethod
+            def isSD(path):
+                #Check whether a RAMP folder is a an SD or server directory
+                SDdataDirs={"DATA","USB"}
+                pathContents=set(os.listdir(path))
+                if SDdataDirs & pathContents != set(): return True
+                else: return False
+
 
         class ramp(object):
             @staticmethod
