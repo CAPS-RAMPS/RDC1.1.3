@@ -2562,6 +2562,10 @@ def closerDate(dates,lastDate,tgt):
     #both dates are after the target date
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
-if __name__ == '__main__':
-    multiprocessing.freeze_support()
-    init()
+# if __name__ == '__main__':
+#     multiprocessing.freeze_support()
+#     init()
+
+import cProfile
+import pstats
+cProfile.run('init()','test')
