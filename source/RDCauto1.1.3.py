@@ -1024,7 +1024,7 @@ class valTracker(object):
     def push(self,val,time,dt):
         #Gives the tracker a new set of values to analyze
         if val!=None:
-            if self.lastStamp!=None or self.lastStamp!=time:
+            if self.lastStamp!=time:
                 self.lastStamp=time
                 if self.autoChecks: 
                     self.checkConn(time,dt)
@@ -1799,10 +1799,6 @@ class ddtTracker(object):
     #Keeps a small list of values, derivatives, and times on hand for average derivatives,
     #noise detection,etc.
     def __init__(self,sInterval=None,critLen=None,critT=None):
-        self.val=list()
-        self.advdt=list() #stores the absolute value of the derivative
-        self.dt=list()
-        self.tList=list() #Stores the time stamps considered
         self.aVal=None      #Average of values
         self.mVal=None      #Median of values
         self.mdVdt=None     #Mean of derivatives
@@ -1815,6 +1811,21 @@ class ddtTracker(object):
             self.critLen=self.optCritLen
         else: self.optCritLen=critLen      #Desired number of points (tradeoff between sample size and performance)
         if critT!=None: self.getSival(critT)
+
+        self.resetLists() #Preallocate arrays to stare value, derivative, time delta, etc.
+
+    def resetLists(self):
+        self.index=0
+        self.dtTot=datetime.timedelta(0)
+        self.val=[None]*self.critLen #List of values to be averages
+        self.advdt=[None]*self.critLen #Stores abs. val of derivative
+        self.dt=[None]*self.critLen #Time delta between two pushes
+        self.tList=[None]*self.critLen #List of time stamps considered
+        self.lists2Trim=[self.dt, #Keeps a track of lists to be trimmed if needed
+                        self.val,
+                        self.advdt,
+                        self.tList]
+
 
     def getSival(self,critT):
         #Determines whether downsampling is necessary given a desired critical time
@@ -1832,29 +1843,38 @@ class ddtTracker(object):
             dt=self.sampleTime(dt)
             if dt==None: return #i.e. if tracker needs to wait before sampling again
             
-            if len(self.dt)>0 and len(self.dt)>self.critLen: self.removePoints(dt)
-            self.val.append(val)
-            self.advdt.append(abs(dvdt))
-            self.dt.append(dt)
-            self.tList.append(time)
+            #If array is filled up, remove the number of points needed and
+            #set self.index accordingly
+            if self.enoughData(): self.removePoints(dt)
 
-            self.aVal=mean(self.val)
-            self.mVal=median(self.val)
-            self.totalTime=genSum(self.dt)
-            self.madVdt=mean(self.advdt)/mean(self.dt).seconds #Mean of absolute derivatives
-            self.dVal=(self.val[-1]-self.val[0])/self.totalTime.seconds #Average derivative
+            #Update tracker arrays
+            i=self.index
+            self.dtTot+=dt
+            self.val[i]==val
+            self.advdt[i]=abs(dvdt)
+            self.dt[i]=dt
+            self.tList[i]=time
+
+            #If necessary, update averages
+            if self.enoughData():
+                self.aVal=mean(self.val)
+                self.mVal=median(self.val)
+                self.totalTime=genSum(self.dt)
+                self.madVdt=mean(self.advdt)/mean(self.dt).seconds #Mean of absolute derivatives
+                self.dVal=(self.val[-1]-self.val[0])/self.totalTime.seconds #Average derivative
 
     def removePoints(self,dt):
-        #Removes old entries before updating the list
-        tSum=datetime.timedelta(0)
-        while (tSum<dt and len(self.dt)>0):
-            #remove the first element of the list until either the list ends or the sum or
-            #an equivalent amount of time is removed from the ddt tracker
-            self.dt.pop(0)
-            self.val.pop(0)
-            self.advdt.pop(0)
-            self.tList.pop(0)
-            tSum+=dt
+        #Removes a number old entries at the start of the list
+        #Based on how much time passed since the last entry
+        nRm=dt//self.dtTot #Determine number of entries to be removed
+        if nRm>=self.critLen: self.resetLists()
+        else:
+            nAdd=self.critLen-nRm #Number of 'None' to be added at the end
+            for cList in self.lists2Trim:
+                cList[0:nRm+1]=cList[nRm:] #Shift later part of list to beginning
+                cList[nRm:]=[None]*nAdd #Add 'None' entries at the end as necessary
+            self.index=nRm+1
+            self.dtTot-=dt
 
     def sampleTime(self,dt):
         #Determines if downsampling is enabled,
@@ -1873,7 +1893,7 @@ class ddtTracker(object):
         else: return None
 
     def enoughData(self): 
-        return (len(self.dt)>=self.critLen)
+        return (self.index>=self.critLen-1)
 
 class flat(object):
     #keeps track of a flatline 
