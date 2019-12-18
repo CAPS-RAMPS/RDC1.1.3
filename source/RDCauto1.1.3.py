@@ -68,7 +68,7 @@ from rawFileReader import read
 #Version
 NAME="RAMP Data Cleaner"
 VERSION="1.1.3WIP"
-REVISION="2019-12-17"
+REVISION="2019-12-18"
 
 #Subfolders
 SETTINGS="Settings"
@@ -1013,6 +1013,7 @@ class valTracker(object):
         self.ddt=dict()     #Stores a few downsampled points in memory to track noise and spikes
         self.ndFlag=dict()    #Stores the information needed for NO DATA flag
         self.ddtOn=False
+        self.lastStamp=None
 
     def setupddt(self):
         self.ddtOn=True
@@ -1023,17 +1024,19 @@ class valTracker(object):
     def push(self,val,time,dt):
         #Gives the tracker a new set of values to analyze
         if val!=None:
-            print("Push Successful")
-            wait=input(','.join([str(val),str(time),str(dt)]))
-            self.vals["last"]=self.vals["current"] #Updates self.vals
-            self.vals["current"]=val #Sets the current readings to what was pushed to the object
-            self.vals["output"]=copy.deepcopy(self.vals["current"]) #Output line will be cleaned by checkAgainstCriteria()
-            if self.autoChecks: 
-                self.checkConn(time,dt)
-                self.checkParsed(time,dt)
-            self.timeDerivative(time,dt)
-            self.checkAgainstCriteria(time,dt)
-            return self.vals["output"]
+            if self.lastStamp!=None or self.lastStamp!=time:
+                self.lastStamp=time
+                if self.autoChecks: 
+                    self.checkConn(time,dt)
+                    self.checkParsed(time,dt)
+            for key in val: #Deal with adding parameters to tracker one by one
+                if key in self.vals['current']:
+                    self.vals["last"][key]=self.vals["current"][key] #Updates self.vals
+                self.vals["current"][key]=val[key] #Sets the current readings to what was pushed to the object
+                self.vals["output"][key]=self.vals["current"][key]#Output line will be cleaned by checkAgainstCriteria()
+                self.timeDerivative(key,time,dt)
+                self.checkAgainstCriteria(key,time,dt)
+            return {key:self.vals["output"][key] for key in val}
         return None
 
     def checkConn(self,time,dt):
@@ -1088,46 +1091,44 @@ class valTracker(object):
                             #Add a flag if the tracker say s so:
                             self.addFlagEntry(key,flagName,time,rm=False) 
 
-    def timeDerivative(self,time,dt): 
+    def timeDerivative(self,key,time,dt): 
         #Gets time derivative from last and current stamps
         last=self.vals["last"]
         current=self.vals["current"]
-        if last!=None:
-            for key in last:
-                if (key.endswith("FLAG") or key in self.flagNames): return #Filters out error flags
-                elif key not in self.ddt and self.ddtOn: self.ddt[key]=ddtTracker()
-                if last[key]!=None and current[key]!=None and dt!=None:
-                    change=last[key]-current[key]
-                    if self.ddtOn: self.ddt[key].push(time,current[key],change,dt)
-                    if dt.seconds>0: 
-                        minuteChange=change*60.0/dt.seconds #Rate of change per minute
-                        self.vals["change"][key]=(minuteChange,change)
-                    else:
-                        self.vals["change"][key]=None #In case of duplicate time stamps
-                else: self.vals["change"][key]=None
+        if last!=None and key in last:
+            if (key.endswith("FLAG") or key in self.flagNames): return #Filters out error flags
+            elif key not in self.ddt and self.ddtOn: self.ddt[key]=ddtTracker()
+            if last[key]!=None and current[key]!=None and dt!=None:
+                change=last[key]-current[key]
+                if self.ddtOn: self.ddt[key].push(time,current[key],change,dt)
+                if dt.seconds>0: 
+                    minuteChange=change*60.0/dt.seconds #Rate of change per minute
+                    self.vals["change"][key]=(minuteChange,change)
+                else:
+                    self.vals["change"][key]=None #In case of duplicate time stamps
+            else: self.vals["change"][key]=None
 
-    def checkAgainstCriteria(self,time,dt):
+    def checkAgainstCriteria(self,key,time,dt):
         #Decided whether values are out of bounds, spikes, error flags, or flatlines
         current=self.vals["current"] #Just to do less typing
         change=self.vals["change"]
         crit=self.crit
-        for key in current:
-            if key in crit:
-                if key not in self.eFlags: self.eFlags[key]=dict()
-                if current[key]==None: return #Skip iteration if value couldn't be read
-                if ((crit[key]["lower"] and current[key]<crit[key]["lower"])
-                    or (crit[key]["upper"] and current[key]>crit[key]["upper"])):
-                    #If either out of bound criterion exists and is met
-                    flag="OOB"
-                    if key in self.doNotAutoRemove: remove=False
-                    else: remove=True
-                    self.addFlagEntry(key,flag,time,rm=remove)
-                elif change!=dict(): #No spikes are reported during the OOB flag
-                    cChange=change[key]
-                    if cChange!=None: #Checks that change between two lines has been established
-                        if self.ddtOn: self.trackNoiseAndSpike(key)
-                        postChange=abs(change[key][1])  #change in value between two posts
-                        self.trackFlatLine(key,current[key],postChange,crit[key],time,dt) 
+        if key in crit:
+            if key not in self.eFlags: self.eFlags[key]=dict()
+            if current[key]==None: return #Skip iteration if value couldn't be read
+            if ((crit[key]["lower"] and current[key]<crit[key]["lower"])
+                or (crit[key]["upper"] and current[key]>crit[key]["upper"])):
+                #If either out of bound criterion exists and is met
+                flag="OOB"
+                if key in self.doNotAutoRemove: remove=False
+                else: remove=True
+                self.addFlagEntry(key,flag,time,rm=remove)
+            elif key in change: #No spikes are reported during the OOB flag
+                cChange=change[key]
+                if cChange!=None: #Checks that change between two lines has been established
+                    if self.ddtOn: self.trackNoiseAndSpike(key)
+                    postChange=abs(change[key][1])  #change in value between two posts
+                    self.trackFlatLine(key,current[key],postChange,crit[key],time,dt) 
 
     def trackNoiseAndSpike(self,key):
         minuteChange=self.vals["change"][key][0] #assigning variables to save on typing
@@ -1585,7 +1586,7 @@ class eChemTracker(valTracker):
     @staticmethod
     def encode(D,enc):
         nD=dict()
-        for key in enc:
+        for key in D:
             nD[enc[key]]=D[key]
         return nD
 
@@ -1722,6 +1723,7 @@ class battTracker(valTracker):
         #(avg. derivative criterion for DRAIN FLAG, min. volt. crit. for DRAIN FLAG, 
         # min. volt for LOW FLAG)
         self.drainFlag="DRAIN"
+        self.eFlags["STAT"]=dict()
 
     def push(self,val,time,dt):
         if val:
@@ -1933,6 +1935,7 @@ class dataYield(object):
     def update(self,dt,time,data=True):
         #Updates the timer, and counters of valid data points and calls to the tracker
         #Returns None until flag criteria are met
+        if dt==None: return
         if dt>self.resetTime: #If last stamp seen was a while ago, start anew
             self.reset(time)
             return None
@@ -2218,8 +2221,8 @@ def parseLine(line,cal,tracker=None):
         #pass2Parser=','.join(['DATE',lineList[1]]) #Second element assumed to be the date
         dateTime=read.timeStamp(lineList[1],cal.date)
         if tracker:  dateTime=tracker.push('DATE',dateTime)
-        if dateTime!=None: parsedDict['DATE']=dateTime #Add to output if time stamp is valid
-
+        if dateTime!=None: 
+            parsedDict['DATE']=dateTime #Add to output if time stamp is valid
     readingsID=2 #Third list element onward assumed to be the start of readings (after time stamp)
 
 
@@ -2253,13 +2256,12 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
                     #Continue to next parameter if could not be parsed
                     i+=1
                     continue
-                if tracker: 
-                    print(elem,readings)
-                    readings=tracker.push(elem,readings)
                 #Use a random header for current element as determinant for category
                 #(all headers in 'readings' should be in the same category)
                 randHeader=next(iter(readings.keys())) #Random header from output
                 catName=rParamDict[randHeader]
+                if tracker: 
+                    readings=tracker.push(catName,readings)
                 if catName not in parsedDict:
                     parsedDict[catName]=readings
                 parsedDict[catName].update(readings)
