@@ -67,8 +67,8 @@ from rawFileReader import read
 
 #Version
 NAME="RAMP Data Cleaner"
-VERSION="1.1.3WIP"
-REVISION="2019-12-18"
+VERSION="1.1.3b0"
+REVISION="2019-12-20"
 
 #Subfolders
 SETTINGS="Settings"
@@ -2582,10 +2582,6 @@ def closerDate(dates,lastDate,tgt):
     #both dates are after the target date
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
-# if __name__ == '__main__':
-#     multiprocessing.freeze_support()
-#     init()
-
-import cProfile
-import pstats
-cProfile.run('init()','test')
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+    init()
