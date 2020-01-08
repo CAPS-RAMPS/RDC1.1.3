@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - Home Desktop.ini"
+RUNFILE="New RAMP Test - RAMP Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
