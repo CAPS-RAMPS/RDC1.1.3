@@ -68,7 +68,7 @@ from rawFileReader import read
 #Version
 NAME="RAMP Data Cleaner"
 VERSION="1.1.3WIP"
-REVISION="2019-12-18"
+REVISION="2020-01-09"
 
 #Subfolders
 SETTINGS="Settings"
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - RAMP Desktop.ini"
+RUNFILE="New RAMP Test - Home Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -929,8 +929,8 @@ class errorTracker(object):
                 ,"MET":     metTracker(runInfo,"MET",bDict["MET"],cDict["MET"])
                 ,"TSI":     tsiTracker(runInfo,"TSI",bDict["TSI"],cDict["TSI"])
                 ,"ADI":     adiTracker(runInfo,"ADI",bDict["ADI"],cDict["ADI"])
-                ,"PPA":     ppaTracker(runInfo,"PPA",bDict["PPA"],cDict["PPA"])
-                ,"PTR":     valTracker(runInfo,"PTR",bDict["PTR"],cDict["PTR"])
+                ,"PPA":     ptrTracker(runInfo,"PPA",bDict["PPA"],cDict["PTR"],"PPA")
+                ,"PTR":     ptrTracker(runInfo,"PTR",bDict["PTR"],cDict["PTR"],"PTR")
                 ,"WIND":    valTracker(runInfo,"WIND",bDict["WIND"],cDict["WIND"])
                 ,"PWR":     battTracker(runInfo,"PWR",bDict["PWR"],cDict["PWR"])
                 ,"STAT":    statTracker(runInfo,"STAT",bDict["STAT"],cDict["STAT"])
@@ -1024,19 +1024,15 @@ class valTracker(object):
     def push(self,val,time,dt):
         #Gives the tracker a new set of values to analyze
         if val!=None:
-            if self.lastStamp!=time:
-                self.lastStamp=time
-                if self.autoChecks: 
-                    self.checkConn(time,dt)
-                    self.checkParsed(time,dt)
-            for key in val: #Deal with adding parameters to tracker one by one
-                if key in self.vals['current']:
-                    self.vals["last"][key]=self.vals["current"][key] #Updates self.vals
-                self.vals["current"][key]=val[key] #Sets the current readings to what was pushed to the object
-                self.vals["output"][key]=self.vals["current"][key]#Output line will be cleaned by checkAgainstCriteria()
-                self.timeDerivative(key,time,dt)
-                self.checkAgainstCriteria(key,time,dt)
-            return {key:self.vals["output"][key] for key in val}
+            self.vals["last"]=self.vals["current"] #Updates self.vals
+            self.vals["current"]=val #Sets the current readings to what was pushed to the object
+            self.vals["output"]=copy.deepcopy(self.vals["current"]) #Output line will be cleaned by checkAgainstCriteria()
+            if self.autoChecks: 
+                self.checkConn(time,dt)
+                self.checkParsed(time,dt)
+            self.timeDerivative(time,dt)
+            self.checkAgainstCriteria(time,dt)
+            return self.vals["output"]
         return None
 
     def checkConn(self,time,dt):
@@ -1091,44 +1087,46 @@ class valTracker(object):
                             #Add a flag if the tracker say s so:
                             self.addFlagEntry(key,flagName,time,rm=False) 
 
-    def timeDerivative(self,key,time,dt): 
+    def timeDerivative(self,time,dt): 
         #Gets time derivative from last and current stamps
         last=self.vals["last"]
         current=self.vals["current"]
-        if last!=None and key in last:
-            if (key.endswith("FLAG") or key in self.flagNames): return #Filters out error flags
-            elif key not in self.ddt and self.ddtOn: self.ddt[key]=ddtTracker()
-            if last[key]!=None and current[key]!=None and dt!=None:
-                change=last[key]-current[key]
-                if self.ddtOn: self.ddt[key].push(time,current[key],change,dt)
-                if dt.seconds>0: 
-                    minuteChange=change*60.0/dt.seconds #Rate of change per minute
-                    self.vals["change"][key]=(minuteChange,change)
-                else:
-                    self.vals["change"][key]=None #In case of duplicate time stamps
-            else: self.vals["change"][key]=None
+        if last!=None:
+            for key in last.keys() & current.keys(): # Go thru readings  but in the current and past dict
+                if (key.endswith("FLAG") or key in self.flagNames): return #Filters out error flags
+                elif key not in self.ddt and self.ddtOn: self.ddt[key]=ddtTracker()
+                if last[key]!=None and current[key]!=None and dt!=None:
+                    change=last[key]-current[key]
+                    if self.ddtOn: self.ddt[key].push(time,current[key],change,dt)
+                    if dt.seconds>0: 
+                        minuteChange=change*60.0/dt.seconds #Rate of change per minute
+                        self.vals["change"][key]=(minuteChange,change)
+                    else:
+                        self.vals["change"][key]=None #In case of duplicate time stamps
+                else: self.vals["change"][key]=None
 
-    def checkAgainstCriteria(self,key,time,dt):
+    def checkAgainstCriteria(self,time,dt):
         #Decided whether values are out of bounds, spikes, error flags, or flatlines
         current=self.vals["current"] #Just to do less typing
         change=self.vals["change"]
         crit=self.crit
-        if key in crit:
-            if key not in self.eFlags: self.eFlags[key]=dict()
-            if current[key]==None: return #Skip iteration if value couldn't be read
-            if ((crit[key]["lower"] and current[key]<crit[key]["lower"])
-                or (crit[key]["upper"] and current[key]>crit[key]["upper"])):
-                #If either out of bound criterion exists and is met
-                flag="OOB"
-                if key in self.doNotAutoRemove: remove=False
-                else: remove=True
-                self.addFlagEntry(key,flag,time,rm=remove)
-            elif key in change: #No spikes are reported during the OOB flag
-                cChange=change[key]
-                if cChange!=None: #Checks that change between two lines has been established
-                    if self.ddtOn: self.trackNoiseAndSpike(key)
-                    postChange=abs(change[key][1])  #change in value between two posts
-                    self.trackFlatLine(key,current[key],postChange,crit[key],time,dt) 
+        for key in current:
+            if key in crit: 
+                if key not in self.eFlags: self.eFlags[key]=dict()
+                if current[key]==None: return #Skip iteration if value couldn't be read
+                if ((crit[key]["lower"] and current[key]<crit[key]["lower"])
+                    or (crit[key]["upper"] and current[key]>crit[key]["upper"])):
+                    #If either out of bound criterion exists and is met
+                    flag="OOB"
+                    if key in self.doNotAutoRemove: remove=False
+                    else: remove=True
+                    self.addFlagEntry(key,flag,time,rm=remove)
+                elif key in change: #No spikes are reported during the OOB flag
+                    cChange=change[key]
+                    if cChange!=None: #Checks that change between two lines has been established
+                        if self.ddtOn: self.trackNoiseAndSpike(key)
+                        postChange=abs(change[key][1])  #change in value between two posts
+                        self.trackFlatLine(key,current[key],postChange,crit[key],time,dt) 
 
     def trackNoiseAndSpike(self,key):
         minuteChange=self.vals["change"][key][0] #assigning variables to save on typing
@@ -1647,21 +1645,22 @@ class adiTracker(valTracker):
     def __init__(self,runInfo,name,crit,const):
         super().__init__(runInfo,name,crit,const)
 
-class ppaTracker(valTracker):
-    def __init__(self,runInfo,name,crit,const):
+class ptrTracker(valTracker):
+    def __init__(self,runInfo,name,crit,const,device):
         super().__init__(runInfo,name,crit,const)
-        self.setupDisagErr()
+        self.device=device
+        self.setupDisagErr(device)
         self.setupddt()
         self.badLines=0
         self.bLCrit=const["badLineCrit"]
 
-    def setupDisagErr(self):
+    def setupDisagErr(self,device):
         self.disagCounter=dict() #Keeps track of multiple consecutive disagreements
         self.noDisagCounter=dict() #keeps track of multiple consecutive agreements
         self.disagStamps=dict()
         self.lines2pushDisag=self.const["lines2pushDisag"]
         self.lines2stopDisag=self.const["lines2stopDisag"]
-        self.PMtags={"PM010","PM025","PM100"}
+        self.PMtags={device+"010",device+"025",device+"100"}
         for tag in self.PMtags:
             self.eFlags[tag]={"DISAG" : list()} #Set up error flag dictionary
             self.disagCounter[tag]=0 #Start the disagreement counter for each PM reading
@@ -1690,6 +1689,8 @@ class ppaTracker(valTracker):
         minDisag=self.const["minDisag"] #Cutoff for disagreement
         for tag in self.PMtags:
             (Atag,Btag)=(tag+"A",tag+"B")
+            if not(Atag in out and Btag in out): 
+                continue #i.e. no entries made for one of the channels, move on to next reading
             (A,B)=(out[Atag],out[Btag]) #Channel readings
             #(medA,medB)=(self.ddt[Atag].mVal,self.ddt[Btag].mVal) #Running medians for channels
             if (A!=None and B!=None): #If readings are defined
@@ -1736,21 +1737,20 @@ class battTracker(valTracker):
     def checkPowerLoss(self,time):
         #Checks for power loss by monitoring battery voltage and its average change
         #To avoid missing power losses after long charge cycles, average change resets every so often
-        if "BATT" in self.ddt:
-            battDdt=self.ddt["BATT"] #Object that tracks the mean value and derivative
-            if not battDdt.enoughData(): return #Skips the check if there is not enough data
+        battDdt=self.ddt["BATT"] #Object that tracks the mean value and derivative
+        if not battDdt.enoughData(): return #Skips the check if there is not enough data
 
-            (mVolt,mdVdt)=(battDdt.mVal,battDdt.dVal) #Mean voltage and change in voltage over 20 lines
-            (dvdtDrain,vDrain)=(self.const["draindVdt"],self.const["drainMinV"])
-            #renames variables for less typing
+        (mVolt,mdVdt)=(battDdt.mVal,battDdt.dVal) #Mean voltage and change in voltage over 20 lines
+        (dvdtDrain,vDrain)=(self.const["draindVdt"],self.const["drainMinV"])
+        #renames variables for less typing
 
-            if mVolt<=self.const["lowCrit"]: #If battery is low
-                if "LOW" not in self.eFlags["STAT"]: self.eFlags["STAT"]["LOW"]=list()
-                self.eFlags["STAT"]["LOW"].append(time)
-            elif mVolt<=vDrain and mdVdt<=dvdtDrain: #If battery is draining
-                if self.drainFlag not in self.eFlags["STAT"]: 
-                    self.eFlags["STAT"][self.drainFlag]=list()
-                self.eFlags["STAT"][self.drainFlag].append(time)         
+        if mVolt<=self.const["lowCrit"]: #If battery is low
+            if "LOW" not in self.eFlags["STAT"]: self.eFlags["STAT"]["LOW"]=list()
+            self.eFlags["STAT"]["LOW"].append(time)
+        elif mVolt<=vDrain and mdVdt<=dvdtDrain: #If battery is draining
+            if self.drainFlag not in self.eFlags["STAT"]: 
+                self.eFlags["STAT"][self.drainFlag]=list()
+            self.eFlags["STAT"][self.drainFlag].append(time)         
 
     def setupddt(self):
         self.ddtOn=True
@@ -2244,18 +2244,16 @@ def parseLine(line,cal,tracker=None):
         if dateTime!=None: 
             parsedDict['DATE']=dateTime #Add to output if time stamp is valid
     readingsID=2 #Third list element onward assumed to be the start of readings (after time stamp)
-
-
-    parseSubstrings(parsedDict,lineList[readingsID:],cal.catNameDict,tracker) 
-    return parsedDict
+    return parseSubstrings(parsedDict,lineList[readingsID:],cal.catNameDict,tracker)
    
 def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
     #Parse the data string after the time stamp
-    #Does not return, populated the parsedDict
+    tempDict=dict()
     pDict=read.options() #Get map of readable headers
     eLenDict=read.expectedLengths() #Get map of readable headers:expected number of outputs
     readableSet=pDict.keys()
     i=0 #Start immediately after the time stamp
+    #Run thru line and attempt to parse out elements
     while i<(len(line)-1):
         elem=line[i]
         if elem in readableSet: #if header is known by the reader, attempt to parse
@@ -2280,13 +2278,19 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
                 #(all headers in 'readings' should be in the same category)
                 randHeader=next(iter(readings.keys())) #Random header from output
                 catName=rParamDict[randHeader]
-                if tracker: 
-                    readings=tracker.push(catName,readings)
-                if catName not in parsedDict:
-                    parsedDict[catName]=readings
-                parsedDict[catName].update(readings)
+                if catName in tempDict:
+                    tempDict[catName].update(readings)
+                else:
+                    tempDict[catName]=readings
                 i+=expLen+1
         else: i+=1
+    #Run all parsed readings through the tracker (so that all readings are there)
+    if tracker:
+        for cat in tempDict:
+            try:
+                parsedDict[cat]=tracker.push(cat,tempDict[cat])
+            except: raise RuntimeError(tempDict[cat])
+    return parsedDict
 
 def inspectElem(elem,tracker):
     pDict=read.options() #Map of parameter name to read method

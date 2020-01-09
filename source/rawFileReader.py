@@ -52,6 +52,10 @@ class read(object):
             "PM2.5" : read.ptr.new,
             "PM10"  : read.ptr.new,
 
+            "PM1.0_2": read.ptr.new,
+            "PM2.5_2": read.ptr.new,
+            "PM10_2" : read.ptr.new,
+
             "WD"    : read.singleVal,
             "WS"    : read.singleVal,
 
@@ -529,9 +533,13 @@ class read(object):
 
         def new(s):
             headerChange=   {
-                            "PM1.0" : "PM010",
-                            "PM2.5" : "PM025",
-                            "PM10"  : "PM100"
+                            "PM1.0" : "PTR010A",
+                            "PM2.5" : "PTR025A",
+                            "PM10"  : "PTR100A",
+
+                            "PM1.0_2" : "PTR010B",
+                            "PM2.5_2" : "PTR025B",
+                            "PM10_2"  : "PTR100B"
                             }
             try: 
                 #sTemp=s.split(',')
