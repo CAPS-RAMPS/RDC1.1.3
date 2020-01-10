@@ -67,8 +67,8 @@ from rawFileReader import read
 
 #Version
 NAME="RAMP Data Cleaner"
-VERSION="1.1.3WIP"
-REVISION="2020-01-09"
+VERSION="1.1.3b1"
+REVISION="2020-01-10"
 
 #Subfolders
 SETTINGS="Settings"
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - Home Desktop.ini"
+RUNFILE="New RAMP Test - RAMP Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -2586,10 +2586,6 @@ def closerDate(dates,lastDate,tgt):
     #both dates are after the target date
     if abs(diffD1)<=abs(diffLd1) and (diffD1>=zdt or diffD2<zdt): return True
 
-# if __name__ == '__main__':
-#     multiprocessing.freeze_support()
-#     init()
-
-import cProfile
-import pstats
-cProfile.run('init()','test')
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+    init()
