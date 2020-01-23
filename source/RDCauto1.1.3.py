@@ -67,7 +67,7 @@ from rawFileReader import read
 
 #Version
 NAME="RAMP Data Cleaner"
-VERSION="1.1.3"
+VERSION="1.1.3b2"
 REVISION="2020-01-23"
 
 #Subfolders
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - Home Desktop.ini"
+RUNFILE="run.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
