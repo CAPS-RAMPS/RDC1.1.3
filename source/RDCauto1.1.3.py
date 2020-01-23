@@ -67,8 +67,8 @@ from rawFileReader import read
 
 #Version
 NAME="RAMP Data Cleaner"
-VERSION="1.1.3b1"
-REVISION="2020-01-10"
+VERSION="1.1.3"
+REVISION="2020-01-23"
 
 #Subfolders
 SETTINGS="Settings"
@@ -80,7 +80,7 @@ OUTPUT="Output"
 #File names
 TEMPLATE="template.ini"
 DEPENDENCIES="dependencies.ini"
-RUNFILE="New RAMP Test - RAMP Desktop.ini"
+RUNFILE="New RAMP Test - Home Desktop.ini"
 CRITERIA="bounds.ini"
 CONST="const.ini"
 ECHEM="SensorMix.csv"
@@ -111,15 +111,16 @@ PERFPATH=os.path.join(WORKDIR,PERFORMANCE,PERF)
 class runParams(object):
 #Contains user inputs that determine how the program will run
     def __init__(self):
-        self.param=config.importDict(TEMPLPATH)
+        self.template=config.importDict(TEMPLPATH)
+        self.param=copy.deepcopy(self.template)
         (self.runPath,self.echemPath)=self.setDefPaths() #Path to Defaults.csv,if it exists
         self.yesterday=datetime.date.today()-datetime.timedelta(days=1)
         self.rampDict=dict() #Maps RAMP number to RAMP object
         self.rParamDict=dict() #e.g. Raw Directory:Paths, Auto Checks:Toggles
-        self.catNameDict=dict()
+        self.rOutputDict=dict()  #e.g. {PTR: [PM010, PM025, PM100]} --> {PM010:PTR, PM025:PTR, PM100:PTR} (from template)
         self.echemDict=dict()
         self.writeReverseDict() #auto-Populates self.rParamDict
-        #self.writeCatNameDict() #auto-Populates self.catNameDict
+        self.writeCatNameDict() #auto-Populates self.rOutputDict
 
     def __repr__(self):
         #Uniquely represents a runParams object as a string containing
@@ -171,9 +172,9 @@ class runParams(object):
                 entry=outputDict[key]
                 if type(entry)==list: #Iterate thru param lists if needed to get ea. elem
                     for value in outputDict[key]:
-                        self.catNameDict[value]=key
+                        self.rOutputDict[value]=key
                 else:
-                    self.catNameDict[entry]=key #Otherwise just add to reversedict
+                    self.rOutputDict[entry]=key #Otherwise just add to reversedict
 
     def loadParams(self):
         print("\nLoading Parameters")
@@ -656,19 +657,20 @@ class rawFile(dataFile):
         f3.end=f2.end
 
 class calFile(dataFile):
-    def __init__(self,ramp,date,path):
+    def __init__(self,ramp,date,path,runInfo):
         super().__init__(ramp,date,path)
         self.echemOrdDict=calFile.convertEchem2OrdDict(ramp.echem)
         self.echemDecode=None          #Defined in self.writeStartLine method
+        self.echemPoss=runInfo.template["Output"]["ECHEM"]
+        print(self.echemPoss)
         self.echem=ramp.echem
         self.output=ramp.output
 
         self.blankLine=None         #Defined in self.writeStartLine method
         self.paramOrder=None        #Defined in self.writeStartLine method
-        self.catNameDict=dict()     #Populated in self.compileParsedRefDicts
+        self.catNameDict=runInfo.rOutputDict
         self.parsedBlankDict=dict() #Populated in self.compileParsedRefDicts
         self.compileParsedRefDicts()
-
 
     def compileParsedRefDicts(self):
         #Creates a Dictionary mapping parameter name to category
@@ -683,7 +685,6 @@ class calFile(dataFile):
             entry=outputDict[key]
 
             for value in outputDict[key]:
-                self.catNameDict[value]=key
                 self.parsedBlankDict[key][value]=None
 
     def writeStartLine(self):
@@ -691,7 +692,7 @@ class calFile(dataFile):
         #([Column Name 1,..., Column Name n], Delimiter in raw file)#
         (params,order)=(copy.copy(self.output['params']),copy.copy(self.output['order']))
 
-        self.echemDecode=calFile.getEchemDecode(params["ECHEM"],self.echemOrdDict)
+        self.echemDecode=calFile.getEchemDecode(self.echemPoss,self.echemOrdDict)
         paramsHeader=copy.deepcopy(params)
         paramsHeader["ECHEM"]=self.orderECHEM(params["ECHEM"])
 
@@ -725,16 +726,16 @@ class calFile(dataFile):
         return echemDict
 
     @staticmethod
-    def getEchemDecode(echemQuery,echemOrdDict):
+    def getEchemDecode(echemPoss,echemOrdDict):
         #Converts an order dictionary e.g.{CO:1, SO2:2} into a decode dictionary:
         #e.g. {S1AUX:COAUX, S2NET:SO2NET}, pulling parameters from a read method
         #and the order from a list processed by calFile.convertEchem2OrdDict
         dlm='' #What goes between the gas name and the reading type. e.g. if dlm=='.': CO.AUX
-        endStrLen=3 #Length of the string at the end describing reading type (e.g AUX, NET, ACT)
+        sHdLen=2 #Length of the sensor header (e.g. 'S1' in S1NET or S1CAL) designating the sensor number
         decodeDict=dict()
-        for param in echemQuery:
-            sensor=param[0:-endStrLen] #Get sensor name (e.g. S1, S2, S3, S4)
-            suffix=param[-endStrLen:] #Get the reading suffix ('CAL','NET','ACT','AUX')
+        for param in echemPoss:
+            sensor=param[0:sHdLen] #Get sensor name (e.g. S1, S2, S3, S4)
+            suffix=param[sHdLen:] #Get the reading suffix ('CAL','NET','ACT','AUX')
             sPlace=int(sensor[1:]) #Get the sensor order by chopping off the "S"
             gasType=echemOrdDict[sPlace] #Query the gas type of the sensor
             outStr=gasType+dlm+suffix #Reconstruct str (e.g. COAUX)
@@ -766,8 +767,6 @@ class calFile(dataFile):
                 i+=1
         return (ordParams,ordDict)
 
-
-
     @staticmethod
     def create(rawFile,runInfo):
     #Creates a calFile object with the appropriate ramp, date, and path
@@ -777,7 +776,7 @@ class calFile(dataFile):
         dirStr=os.path.join(calDir,rampStr)
         date=rawFile.date
         path=os.path.join(dirStr,str(date)+calFile.ext())
-        out=calFile(ramp,date,path)
+        out=calFile(ramp,date,path,runInfo)
         return out
 
 class errorFile(rampFile):
@@ -2289,7 +2288,7 @@ def parseSubstrings(parsedDict,line,rParamDict,tracker=None):
         for cat in tempDict:
             try:
                 parsedDict[cat]=tracker.push(cat,tempDict[cat])
-            except: raise RuntimeError(tempDict[cat])
+            except: raise RuntimeError(cat,tempDict[cat])
     return parsedDict
 
 def inspectElem(elem,tracker):
