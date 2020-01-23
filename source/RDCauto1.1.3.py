@@ -662,7 +662,6 @@ class calFile(dataFile):
         self.echemOrdDict=calFile.convertEchem2OrdDict(ramp.echem)
         self.echemDecode=None          #Defined in self.writeStartLine method
         self.echemPoss=runInfo.template["Output"]["ECHEM"]
-        print(self.echemPoss)
         self.echem=ramp.echem
         self.output=ramp.output
 
