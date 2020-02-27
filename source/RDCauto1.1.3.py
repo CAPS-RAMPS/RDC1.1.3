@@ -1,7 +1,6 @@
 #_____CHANGE LOG_____#
-    #1.1.3 2019-11-xx
-        #- Change reading routine to work with v9.13 RAMP firmware
-        #- Modify trackers to work with v9.13 RAMP firmware
+    #1.1.3 2020-02-27
+        #Modified code to work with v.9.13+ firmware
 
     #1.1.2 2019-05-08
         #Fixed compatibility issue w/new firmware RAMP-PPA boxes installed on new PPAs
@@ -67,7 +66,7 @@ from rawFileReader import read
 
 #Version
 NAME="RAMP Data Cleaner"
-VERSION="1.1.3b2"
+VERSION="1.1.3"
 REVISION="2020-01-23"
 
 #Subfolders
