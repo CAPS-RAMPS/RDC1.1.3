@@ -196,7 +196,7 @@ class runParams(object):
             echem=open(self.echemPath,'r')
             line=echem.readline()
             while line!="":
-                line=removeChars(line,{"\n"})
+                line=removeChars(line,{"\n",'"'})
                 line=line.split(",")
                 rampNum=int(line[0])
                 #Save in format ramp -> [S1,S2,S3,S4] e.g. 154->["CO","SO2","NO2","O3"]
@@ -677,10 +677,14 @@ class calFile(dataFile):
         #e.g {PTR: [PM010, PM025, PM100]} --> {PTR: {PM010: None, PM025: None, PM100: None}}
 
         outputDict=self.output['params'] #Get source dictionary
-        print(outputDict)
+
         for key in outputDict:
-            self.parsedBlankDict[key]=dict()
             entry=outputDict[key]
+            if entry==None:
+                continue
+            else:
+                self.parsedBlankDict[key]=dict()
+            
 
             for value in outputDict[key]:
                 self.parsedBlankDict[key][value]=None
