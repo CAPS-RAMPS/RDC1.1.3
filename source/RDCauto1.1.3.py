@@ -677,7 +677,7 @@ class calFile(dataFile):
         #e.g {PTR: [PM010, PM025, PM100]} --> {PTR: {PM010: None, PM025: None, PM100: None}}
 
         outputDict=self.output['params'] #Get source dictionary
-
+        print(outputDict)
         for key in outputDict:
             self.parsedBlankDict[key]=dict()
             entry=outputDict[key]
