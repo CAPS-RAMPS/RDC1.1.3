@@ -41,7 +41,7 @@ TEMPLATE= config.importDict(TEMPLPATH)
 DEPENDENCIES = config.importDict(DEPENDPATH)
 TOOLTIPS = config.importDict(TOOLTIPPATH,delimit=False)
 DCWNAME = 'RDCauto1.1.3'
-for ext in ['.exe','.py']:
+for ext in ['.exe','.py','']:
     if os.path.exists(os.path.join(SOURCE,(DCWNAME+ext))):
         DCWEXT=ext
         break
